@@ -1,0 +1,41 @@
+# PrometheusRule shell — apply when exchange metrics exist (Phase 2+).
+# kubectl apply -f observability/alerts/slo-rules.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: stock-exchange-slo
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: stock-exchange
+    release: prometheus
+spec:
+  groups:
+    - name: stock-exchange-slo
+      interval: 30s
+      rules:
+        - alert: GatewayRejectRateHigh
+          expr: |
+            (
+              sum(rate(http_requests_total{status="429"}[1m]))
+              /
+              sum(rate(http_requests_total[1m]))
+            ) > 0.10
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: Gateway 429 rate above 10%
+        - alert: KafkaConsumerLagHigh
+          expr: max(kafka_consumer_lag) > 1000
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: Kafka consumer lag above 1000
+        - alert: ReferenceIngestFailed
+          expr: increase(reference_ingest_errors_total[5m]) > 0
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: Reference data ingest errors detected

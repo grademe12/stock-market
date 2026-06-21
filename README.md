@@ -23,16 +23,18 @@ git clone https://github.com/grademe12/stock-market.git
 cd stock-market
 
 make help
-make kind-up        # 3-node kind cluster
-make cluster-info   # nodes Ready 확인
-make deps           # helm repo 등록
+make kind-up              # 3-node kind cluster
+make cluster-info         # nodes Ready 확인
+make install-observability # Prometheus + Grafana (PR-0.2)
+make grafana-port-forward # http://localhost:3000 (admin/admin)
 ```
 
 ## 개발 상태
 
 | Phase | 상태 |
 |-------|------|
-| PR-0.1 scaffold | 진행 중 |
-| PR-0.2~0.4 infra | 예정 |
+| PR-0.1 scaffold | 완료 |
+| PR-0.2 observability | 완료 |
+| PR-0.3~0.4 infra | 예정 |
 | Phase 0.5 reference-data (pykrx) | 예정 |
 | Phase 1+ exchange services | 예정 |

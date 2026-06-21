@@ -1,0 +1,70 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "content": "Burst scenarios T2/T3/T4 — RPS, p99, Kafka lag, 429 rate. Populated in Phase 2+.",
+        "mode": "markdown"
+      },
+      "title": "Burst Scenarios",
+      "type": "text"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 4 },
+      "id": 2,
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{status=\"429\"}[5m]))",
+          "legendFormat": "429/s",
+          "refId": "A"
+        }
+      ],
+      "title": "Gateway 429 rate (placeholder)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 4 },
+      "id": 3,
+      "targets": [
+        {
+          "expr": "max(kafka_consumer_lag)",
+          "legendFormat": "max lag",
+          "refId": "A"
+        }
+      ],
+      "title": "Kafka consumer lag (placeholder)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 4 },
+      "id": 4,
+      "targets": [
+        {
+          "expr": "count(kube_pod_status_ready{namespace=\"exchange\", condition=\"true\"})",
+          "legendFormat": "ready pods",
+          "refId": "A"
+        }
+      ],
+      "title": "Exchange pods ready (placeholder)",
+      "type": "timeseries"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["stock-exchange", "burst"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "browser",
+  "title": "Burst Scenarios",
+  "uid": "burst-scenarios",
+  "version": 1
+}

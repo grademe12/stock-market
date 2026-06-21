@@ -907,4 +907,4 @@ flowchart TD
 
 ---
 
-*Last updated: 2026-06-21 (Phase 0.5 reference-data 추가)*
+*Last updated: 2026-06-21 (PR-0.2 observability 추가)*

@@ -1,0 +1,25 @@
+# ServiceMonitor pattern for exchange services (Phase 1+).
+# Prometheus discovers this when serviceMonitorNamespaceSelector is {} (see values-prometheus.yaml).
+#
+# Apply after order-gateway Deployment exists:
+#   kubectl apply -f deploy/helm/observability/examples/order-gateway-servicemonitor.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: order-gateway
+  namespace: exchange
+  labels:
+    app.kubernetes.io/name: order-gateway
+    app.kubernetes.io/part-of: stock-exchange
+spec:
+  namespaceSelector:
+    matchNames:
+      - exchange
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: order-gateway
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s

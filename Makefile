@@ -6,7 +6,11 @@ export PATH := $(abspath bin):$(PATH)
 CLUSTER_NAME ?= stock-exchange
 KIND_CONFIG  ?= deploy/kind/cluster.yaml
 NAMESPACE    ?= exchange
+MONITORING_NS ?= monitoring
 HELM_CHART   ?= deploy/helm/stock-exchange
+PROM_RELEASE ?= prometheus
+PROM_CHART   ?= prometheus-community/kube-prometheus-stack
+PROM_VALUES  ?= deploy/helm/observability/values-prometheus.yaml
 
 .PHONY: help
 help: ## Show available targets
@@ -53,11 +57,36 @@ deps: ## Add helm repositories (no install)
 	helm repo update
 	@echo "Helm repos ready"
 
+# --- observability (PR-0.2) ---
+
+.PHONY: install-observability
+install-observability: deps ## Install kube-prometheus-stack + Grafana dashboards
+	@command -v kubectl >/dev/null 2>&1 || { echo "kubectl not found"; exit 1; }
+	kubectl get namespace $(MONITORING_NS) >/dev/null 2>&1 || kubectl create namespace $(MONITORING_NS)
+	helm upgrade --install $(PROM_RELEASE) $(PROM_CHART) \
+		-n $(MONITORING_NS) \
+		-f $(PROM_VALUES) \
+		--wait --timeout 10m
+	chmod +x deploy/helm/observability/scripts/apply-dashboards.sh
+	MONITORING_NAMESPACE=$(MONITORING_NS) deploy/helm/observability/scripts/apply-dashboards.sh
+	@echo "Grafana: kubectl port-forward -n $(MONITORING_NS) svc/prometheus-grafana 3000:80"
+	@echo "Login: admin / admin"
+
+.PHONY: grafana-port-forward
+grafana-port-forward: ## Port-forward Grafana to localhost:3000
+	kubectl port-forward -n $(MONITORING_NS) svc/prometheus-grafana 3000:80
+
+.PHONY: observability-status
+observability-status: ## Show monitoring stack pod status
+	kubectl get pods -n $(MONITORING_NS)
+	kubectl get servicemonitor -A 2>/dev/null | head -20 || true
+
 # --- stubs (implemented in later PRs) ---
 
 .PHONY: helm-install install-infra install-apps tilt-up
-helm-install install-infra install-apps tilt-up:
-	@echo "$@: not implemented yet — see docs/IMPLEMENTATION_PLAN.md Phase 0.2+"
+helm-install: install-observability ## Alias: observability only until PR-0.3
+install-infra install-apps tilt-up:
+	@echo "$@: not implemented yet — see docs/IMPLEMENTATION_PLAN.md Phase 0.3+"
 
 .PHONY: test-steady test-symbol-spike test-market-open test-flash-event
 test-steady test-symbol-spike test-market-open test-flash-event:
