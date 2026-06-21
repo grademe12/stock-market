@@ -1,0 +1,7 @@
+# Tilt dev loop — placeholder for PR-0.1.
+# Phase 1+: local_resource, helm_resource for hot-reload.
+#
+# Usage (after Phase 1):
+#   tilt up -f deploy/tilt/Tiltfile
+
+print("stock-exchange: Tiltfile placeholder — enable in Phase 1+")

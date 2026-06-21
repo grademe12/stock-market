@@ -1,0 +1,6 @@
+# Global defaults for stock-exchange umbrella chart.
+# Subchart values added in PR-0.2 (observability) and PR-0.3 (data layer).
+
+global:
+  namespace: exchange
+  imageRegistry: ""

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: stock-exchange
+description: A+ stock market simulator (event-driven, K8s-native)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

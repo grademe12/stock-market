@@ -3,7 +3,7 @@
 > **문서 목적**: 부하 제어·테스트·모니터링을 1순위 학습 목표로 하는 이벤트 기반 주식시장 시뮬레이터(A+안)의 구현 계획.
 > 에이전트가 Phase/PR 단위로 직접 참조·실행할 수 있도록 작성됨.
 
-**관련 문서**: [README.md](../README.md)
+**관련 문서**: [README.md](../README.md) · [UBUNTU_SETUP.md](./UBUNTU_SETUP.md)
 
 ---
 
