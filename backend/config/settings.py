@@ -1,7 +1,8 @@
 """Development settings for the exchange backend.
 
-SQLite is intentionally used during the early learning stages. PostgreSQL is
-introduced only when durable trade and account state becomes necessary.
+SQLite is intentionally used during the early learning stages for local
+development configuration. PostgreSQL is introduced only when durable trade
+and account state becomes necessary.
 """
 
 from pathlib import Path

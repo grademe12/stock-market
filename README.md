@@ -8,6 +8,7 @@
 | 문서 | 내용 |
 |------|------|
 | [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | 점진적 학습 단계와 기술 도입 기준 |
+| [docs/TRADING_PARTICIPANT_SIMULATION_PLAN.md](docs/TRADING_PARTICIPANT_SIMULATION_PLAN.md) | 가상 거래 참여자와 트레이더 설정 계획 |
 | [docs/UBUNTU_SETUP.md](docs/UBUNTU_SETUP.md) | Ubuntu/WSL 1회 셋업 체크리스트 |
 
 ## 프로젝트 구조
@@ -40,6 +41,6 @@ Stage 0~2에서는 `backend/`의 Django 단일 프로세스와 k6만 사용한�
 | 기존 kind/Makefile·observability 스캐폴딩 | 완료 (나중 단계에서 재사용) |
 | Stage 0: Django/DRF 개발 기반 정리 | 완료 |
 | Stage 1: 단일 프로세스 매칭 엔진 | 완료 |
-| Stage 1.5: 거래 참여자 시뮬레이션 | 예정 |
+| Stage 1.5: 거래 참여자 시뮬레이션 | 완료 (NoiseTrader) |
 | Stage 2: k6 부하 테스트·기본 rate limit | 예정 |
 | Stage 3+: 관측성·queue·영속화·K8s | 측정 결과에 따라 순차 도입 |

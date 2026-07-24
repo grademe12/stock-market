@@ -6,6 +6,8 @@
 
 **관련 문서**: [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) · [KRX_TOP100_REFERENCE_DATA_PLAN.md](./KRX_TOP100_REFERENCE_DATA_PLAN.md)
 
+**현재 상태**: P1 NoiseTrader, TTL 기반 주문 취소, in-process runtime, start/stop/status/manual tick API, 트레이더별 영속 설정 CRUD API와 테스트 구현 완료. Momentum·Mean-Reversion·선택적 LP는 후속 작업이다.
+
 ---
 
 ## 1. 문제와 목표
@@ -72,6 +74,8 @@ Noise / Momentum / Mean-Reversion 참여자
 | `order_ttl_ticks` | 5 | 미체결 주문 만료 tick |
 | `seed` | 42 | 재현 가능한 난수 seed |
 
+각 참가자는 위 기본값을 공유하지 않아도 된다. `TraderProfile`은 `name`, `user_id`, `enabled`와 함께 가격·수량·TTL·실행 주기(`interval_ticks`)·seed를 개별적으로 보관한다. 이는 Django 모델과 DRF API에만 의존하며, 봇 도메인 코드는 `TraderSettings`로 변환된 값만 받는다.
+
 참여자는 한 번에 매수 또는 매도 한 방향 주문만 낸다. 따라서 시장에 양방향 유동성이 생기는 것은 여러 참여자의 집합 행동 결과다.
 
 ### P2 — Momentum Trader
@@ -112,7 +116,7 @@ DRF API / Bot control API
 
 ---
 
-## 5. API 초안
+## 5. API
 
 제어 API는 로컬 개발·실험 목적이다. 인증·권한은 계좌 기능을 도입할 때 별도 설계한다.
 
@@ -122,6 +126,12 @@ DRF API / Bot control API
 | `DELETE` | `/api/v1/simulations/participants/` | 실행 중지 |
 | `GET` | `/api/v1/simulations/participants/` | 상태·tick·주문·체결 통계 확인 |
 | `POST` | `/api/v1/simulations/participants/tick/` | 수동으로 한 tick 실행 |
+| `GET` / `POST` | `/api/v1/traders/` | 트레이더 설정 목록 조회 / 생성 |
+| `GET` / `PATCH` / `DELETE` | `/api/v1/traders/{trader_id}/` | 트레이더 설정 조회 / 수정 / 삭제 |
+
+`POST`, `PATCH`, `DELETE`와 시뮬레이션 제어 API는 현재 인증이 없는 로컬 실험 기능이므로 `DEBUG` 환경에서만 허용한다. 목록·상세 `GET` 응답은 프론트엔드 폼이 그대로 사용할 수 있도록 모든 설정 필드와 생성·수정 시각을 반환한다.
+
+트레이더 설정이 하나 이상 존재하면 `enabled=true`인 트레이더만 실행한다. `start`/`tick` 요청의 선택적 `trader_ids` 배열로 실행 대상을 좁힐 수 있으며, 비활성화됐거나 존재하지 않는 ID는 거절한다. 설정이 전혀 없을 때만 아래의 legacy 요청 값으로 임시 NoiseTrader를 생성한다.
 
 시작 요청 예시:
 
@@ -136,6 +146,26 @@ DRF API / Bot control API
   "quantity_max": 10,
   "order_ttl_ticks": 5,
   "interval_ms": 1000,
+  "seed": 42
+}
+```
+
+트레이더 생성 요청 예시:
+
+```json
+{
+  "name": "slow-noise-1",
+  "user_id": "noise-profile-001",
+  "strategy": "noise",
+  "enabled": true,
+  "symbol": "005930",
+  "reference_price": 70000,
+  "price_step": 100,
+  "max_offset_steps": 5,
+  "quantity_min": 1,
+  "quantity_max": 10,
+  "order_ttl_ticks": 5,
+  "interval_ticks": 2,
   "seed": 42
 }
 ```
@@ -193,7 +223,6 @@ Stage 3 Prometheus 도입 전에는 status API와 테스트 결과로 확인한�
 | `orders_canceled_total` | TTL로 취소된 주문 수 |
 | `trades_generated_total` | 봇 주문으로 발생한 체결 수 |
 | `open_bot_orders` | 현재 미체결 봇 주문 수 |
-| `last_tick_at` | 마지막 실행 시각 |
 | `last_error` | 마지막 실행 오류 |
 
 Prometheus 도입 후에는 위 항목을 metric으로 승격하고, k6 주문 흐름과 함께 대시보드에서 비교한다.

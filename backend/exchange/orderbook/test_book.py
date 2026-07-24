@@ -108,6 +108,15 @@ class OrderBookTests(SimpleTestCase):
         with self.assertRaises(OrderNotFoundError):
             self.book.cancel(self.order(user_id="alice", side=OrderSide.BUY, price=70_000, quantity=1).order_id)
 
+    def test_get_open_order_returns_none_after_cancel(self) -> None:
+        buy_order = self.order(user_id="alice", side=OrderSide.BUY, price=70_000, quantity=3)
+        self.book.submit(buy_order)
+
+        self.assertEqual(self.book.get_open_order(buy_order.order_id).order, buy_order)
+        self.book.cancel(buy_order.order_id)
+
+        self.assertIsNone(self.book.get_open_order(buy_order.order_id))
+
     def test_snapshot_aggregates_orders_at_same_price_level(self) -> None:
         self.book.submit(self.order(user_id="alice", side=OrderSide.BUY, price=70_000, quantity=3))
         self.book.submit(self.order(user_id="bob", side=OrderSide.BUY, price=70_000, quantity=5))

@@ -92,6 +92,15 @@ class OrderBook:
 
         raise OrderNotFoundError(f"open order {order_id} was not found")
 
+    def get_open_order(self, order_id: UUID) -> OpenOrder | None:
+        """Return an open order by ID, or ``None`` when it has been filled/canceled."""
+        with self._lock:
+            for orders in (self._bids, self._asks):
+                for open_order in orders:
+                    if open_order.order.order_id == order_id:
+                        return open_order
+        return None
+
     def snapshot(self) -> BookSnapshot:
         with self._lock:
             return BookSnapshot(
