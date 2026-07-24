@@ -6,12 +6,6 @@ dist/
 *.so
 *.dylib
 
-# Go
-/vendor/
-*.test
-*.out
-coverage.out
-
 # Python
 __pycache__/
 *.py[cod]
@@ -19,6 +13,7 @@ __pycache__/
 venv/
 *.egg-info/
 .pytest_cache/
+*.sqlite3
 
 # Environment
 .env

@@ -19,7 +19,31 @@ help: ## Show available targets
 	@grep -E '^[a-zA-Z0-9_.-]+:.*##' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*## "}; {printf "  %-22s %s\n", $$1, $$2}'
 	@echo ""
-	@echo "Quick start: make kind-up && make cluster-info"
+	@echo "Quick start: make backend-setup && make backend-run"
+
+# --- Django backend (Stage 0) ---
+
+BACKEND_DIR ?= backend
+BACKEND_PYTHON ?= $(BACKEND_DIR)/.venv/bin/python
+
+.PHONY: backend-setup backend-migrate backend-test backend-run test run
+backend-setup: ## Create backend virtualenv and install dependencies
+	python3 -m venv $(BACKEND_DIR)/.venv
+	$(BACKEND_PYTHON) -m pip install --upgrade pip
+	$(BACKEND_PYTHON) -m pip install -r $(BACKEND_DIR)/requirements.txt
+
+backend-migrate: ## Apply local Django SQLite migrations
+	cd $(BACKEND_DIR) && .venv/bin/python manage.py migrate
+
+backend-test: ## Run Django backend tests
+	cd $(BACKEND_DIR) && .venv/bin/python manage.py test
+
+backend-run: ## Start Django development server
+	cd $(BACKEND_DIR) && .venv/bin/python manage.py runserver
+
+test: backend-test ## Alias for backend-test
+
+run: backend-run ## Alias for backend-run
 
 # --- kind cluster (PR-0.1) ---
 
