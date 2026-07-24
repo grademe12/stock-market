@@ -39,6 +39,6 @@ Stage 0~2에서는 `backend/`의 Django 단일 프로세스와 k6만 사용한�
 |-------|------|
 | 기존 kind/Makefile·observability 스캐폴딩 | 완료 (나중 단계에서 재사용) |
 | Stage 0: Django/DRF 개발 기반 정리 | 완료 |
-| Stage 1: 단일 프로세스 매칭 엔진 | 예정 |
+| Stage 1: 단일 프로세스 매칭 엔진 | 완료 |
 | Stage 2: k6 부하 테스트·기본 rate limit | 예정 |
 | Stage 3+: 관측성·queue·영속화·K8s | 측정 결과에 따라 순차 도입 |

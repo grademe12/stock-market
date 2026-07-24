@@ -219,7 +219,7 @@ Redis, WebSocket, trading-bot은 이 단계에서도 필요성이 확인될 때�
 
 기존 PR-0.1/0.2에서 kind, Makefile, Prometheus/Grafana용 파일이 추가되어 있다. 이는 나중 Stage 3/6에서 재사용할 수 있지만, **현재 학습 진행 기준은 Stage 0부터 다시 시작**한다.
 
-S0.1/S0.2의 기본 설정은 완료됐다. 다음 PR 권장 범위는 **S1.1 — 가격·시간 우선 order book의 순수 도메인 로직과 테스트**다.
+S0.1/S0.2와 Stage 1의 단일 프로세스 매칭 엔진은 완료됐다. 다음 PR 권장 범위는 **S2.1 — k6 steady 시나리오로 현재 HTTP 주문 API의 처리량과 지연 시간을 측정**하는 것이다.
 
 완료 기준:
 
