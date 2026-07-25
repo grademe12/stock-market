@@ -6,7 +6,7 @@
 
 **관련 문서**: [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) · [KRX_TOP100_REFERENCE_DATA_PLAN.md](./KRX_TOP100_REFERENCE_DATA_PLAN.md)
 
-**현재 상태**: P1 NoiseTrader, TTL 기반 주문 취소, in-process runtime, start/stop/status/manual tick API, 트레이더별 영속 설정 CRUD API와 테스트 구현 완료. Momentum·Mean-Reversion·선택적 LP는 후속 작업이다.
+**현재 상태**: P1 NoiseTrader, TTL 기반 주문 취소, in-process runtime, start/stop/status/manual tick API, 트레이더별 영속 설정 CRUD API와 별도 HTTP participant-runner 구현 완료. Momentum·Mean-Reversion·선택적 LP는 후속 작업이다.
 
 ---
 
@@ -94,7 +94,7 @@ Noise / Momentum / Mean-Reversion 참여자
 
 ## 4. 아키텍처 제약과 구성
 
-현재 order book은 Django 서버 프로세스의 메모리에 존재한다. 따라서 별도 `manage.py` 프로세스나 별도 worker에서 봇을 실행하면 서로 다른 order book을 보게 된다.
+현재 order book은 Django 서버 프로세스의 메모리에 존재한다. 따라서 별도 `manage.py` 프로세스나 별도 worker에서 `OrderBook`을 직접 호출하면 서로 다른 order book을 보게 된다.
 
 초기 구현은 단일 Django 프로세스 안에서만 동작한다.
 
@@ -113,6 +113,17 @@ DRF API / Bot control API
 ```
 
 `ParticipantOrchestrator.tick()`은 동기 함수로 먼저 구현한다. background thread는 이 함수를 일정 주기로 호출하는 얇은 실행 계층으로만 둔다. 이렇게 하면 테스트에서 시간·thread 의존 없이 tick 단위로 결과를 검증할 수 있다.
+
+### 4.1 외부 participant-runner
+
+백엔드 부하 실습에는 in-process runtime을 사용하지 않는다. 루트의 `participant-runner/`는 별도 프로세스/컨테이너로 동작하며, `GET /traders/`로 활성 프로필을 읽고 `POST /orders/`, `DELETE /orders/{id}/`만 호출한다. 즉 runner는 API 소비자이고, 매칭 상태를 공유하지 않는다.
+
+```text
+participant-runner container
+  └─ HTTP requests → Django REST API → in-memory OrderBook
+```
+
+프로필 수가 가상 트레이더 수의 기준이며, 컨테이너 환경 변수 `MAX_TRADERS`와 `TRADER_IDS`는 실행 범위만 제한한다. 첫 버전은 중복 주문 방지를 위해 runner 컨테이너 한 개만 지원한다. 자세한 실행·컨테이너 설정은 [`participant-runner/README.md`](../participant-runner/README.md)를 따른다.
 
 ---
 

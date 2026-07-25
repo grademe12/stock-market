@@ -26,7 +26,7 @@ help: ## Show available targets
 BACKEND_DIR ?= backend
 BACKEND_PYTHON ?= $(BACKEND_DIR)/.venv/bin/python
 
-.PHONY: backend-setup backend-migrate backend-test backend-run test run
+.PHONY: backend-setup backend-migrate backend-test backend-run participant-runner-test test run
 backend-setup: ## Create backend virtualenv and install dependencies
 	python3 -m venv $(BACKEND_DIR)/.venv
 	$(BACKEND_PYTHON) -m pip install --upgrade pip
@@ -40,6 +40,9 @@ backend-test: ## Run Django backend tests
 
 backend-run: ## Start Django development server
 	cd $(BACKEND_DIR) && .venv/bin/python manage.py runserver
+
+participant-runner-test: ## Run external participant runner tests
+	cd participant-runner && PYTHONPATH=../backend python3 -m unittest discover
 
 test: backend-test ## Alias for backend-test
 

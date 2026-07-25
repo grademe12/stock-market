@@ -15,6 +15,7 @@
 
 ```text
 backend/       Django + Django REST Framework 거래소 API와 매칭 엔진
+participant-runner/ 별도 프로세스/컨테이너로 실행되는 HTTP 시장참여자
 frontend/      향후 웹 클라이언트 (현재는 계획만 존재)
 docs/          구현·학습 계획
 loadtest/      부하 테스트 시나리오 (Stage 2부터)
@@ -41,6 +42,6 @@ Stage 0~2에서는 `backend/`의 Django 단일 프로세스와 k6만 사용한�
 | 기존 kind/Makefile·observability 스캐폴딩 | 완료 (나중 단계에서 재사용) |
 | Stage 0: Django/DRF 개발 기반 정리 | 완료 |
 | Stage 1: 단일 프로세스 매칭 엔진 | 완료 |
-| Stage 1.5: 거래 참여자 시뮬레이션 | 완료 (NoiseTrader) |
+| Stage 1.5: 거래 참여자 시뮬레이션 | 완료 (in-process 및 외부 HTTP NoiseTrader) |
 | Stage 2: k6 부하 테스트·기본 rate limit | 예정 |
 | Stage 3+: 관측성·queue·영속화·K8s | 측정 결과에 따라 순차 도입 |

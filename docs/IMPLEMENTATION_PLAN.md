@@ -219,7 +219,7 @@ Redis, WebSocket, trading-bot은 이 단계에서도 필요성이 확인될 때�
 
 기존 PR-0.1/0.2에서 kind, Makefile, Prometheus/Grafana용 파일이 추가되어 있다. 이는 나중 Stage 3/6에서 재사용할 수 있지만, **현재 학습 진행 기준은 Stage 0부터 다시 시작**한다.
 
-S0.1/S0.2, Stage 1의 단일 프로세스 매칭 엔진, Stage 1.5의 NoiseTrader 참여자 시뮬레이션은 완료됐다. 다음 기본 작업은 **S2.1 — k6 steady 시나리오로 현재 HTTP 주문 API의 처리량과 지연 시간을 측정**하는 것이다. KRX 상위 100개 참조 데이터는 [별도 계획](./KRX_TOP100_REFERENCE_DATA_PLAN.md)에 따라 독립적으로 진행한다.
+S0.1/S0.2, Stage 1의 단일 프로세스 매칭 엔진, Stage 1.5의 NoiseTrader 참여자 시뮬레이션은 완료됐다. Stage 1.5에는 백엔드와 분리돼 HTTP 요청을 보내는 `participant-runner`도 포함된다. 다음 기본 작업은 **S2.1 — k6 steady 시나리오로 현재 HTTP 주문 API의 처리량과 지연 시간을 측정**하는 것이다. KRX 상위 100개 참조 데이터는 [별도 계획](./KRX_TOP100_REFERENCE_DATA_PLAN.md)에 따라 독립적으로 진행한다.
 
 완료 기준:
 
