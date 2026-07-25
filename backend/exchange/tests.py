@@ -42,6 +42,16 @@ class OrderApiTests(APITestCase):
         self.assertEqual(buy_response.data["trades"][0]["price"], 70_000)
         self.assertEqual(buy_response.data["trades"][0]["qty"], 3)
 
+    @override_settings(TRADE_EXECUTION_LOG_ENABLED=True)
+    def test_execution_log_is_emitted_only_for_a_matched_trade(self):
+        self.submit_order(user_id="seller", side="SELL", price=70_000, qty=1)
+
+        with self.assertLogs("exchange.execution", level="INFO") as logs:
+            self.submit_order(user_id="buyer", side="BUY", price=70_000, qty=1)
+
+        self.assertIn("event=trade_executed", logs.output[0])
+        self.assertIn("symbol=005930", logs.output[0])
+
     def test_book_snapshot_and_cancel_endpoint(self):
         order_response = self.submit_order()
         order_id = order_response.data["order_id"]

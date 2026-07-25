@@ -1,4 +1,5 @@
 from dataclasses import asdict
+import logging
 from uuid import UUID
 
 from django.conf import settings
@@ -22,6 +23,7 @@ from exchange.serializers import (
 from exchange.trader_profiles import profiles_to_participants
 
 SIMULATION_SYMBOL = "005930"
+execution_logger = logging.getLogger("exchange.execution")
 order_book = OrderBook(symbol=SIMULATION_SYMBOL)
 
 
@@ -49,8 +51,10 @@ def create_order(request):
     if order.symbol != SIMULATION_SYMBOL:
         raise ValidationError({"symbol": f"only {SIMULATION_SYMBOL} is supported"})
 
+    result = order_book.submit(order)
+    _log_executed_trades(result)
     return Response(
-        match_result_payload(order_book.submit(order)),
+        match_result_payload(result),
         status=status.HTTP_201_CREATED,
     )
 
@@ -77,6 +81,21 @@ def cancel_order(request, order_id: UUID):
             "canceled_qty": canceled_order.remaining_quantity,
         }
     )
+
+
+def _log_executed_trades(result) -> None:
+    """Emit one compact, machine-readable line per matched trade when enabled."""
+    if not settings.TRADE_EXECUTION_LOG_ENABLED:
+        return
+    for trade in result.trades:
+        execution_logger.info(
+            "event=trade_executed symbol=%s price=%s qty=%s buy_order_id=%s sell_order_id=%s",
+            trade.symbol,
+            trade.price,
+            trade.quantity,
+            trade.buy_order_id,
+            trade.sell_order_id,
+        )
 
 
 def _participant_config(request):

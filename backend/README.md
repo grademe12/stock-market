@@ -32,6 +32,8 @@ docker compose up --build backend
 
 Compose 설정은 backend 컨테이너를 CPU 1코어(`cpus: "1.0"`)와 메모리 4GiB(`memory: 4G`)로 제한한다. 이는 이미지 자체가 아니라 로컬 Compose 실행 정책이다.
 
+`TRADE_EXECUTION_LOG_ENABLED=1`이면 체결 1건마다 backend 표준 출력에 `event=trade_executed`, 종목·가격·수량·매수/매도 주문 ID를 남긴다. Compose 개발 설정에서는 기본으로 켜져 있어 `docker compose logs -f backend`로 확인할 수 있다. k6처럼 성능을 측정하는 실험에서는 로그 I/O가 결과에 영향을 줄 수 있으므로 `0`으로 끈다.
+
 외부 시장참여자까지 함께 실행하려면 활성 트레이더 프로필을 만든 후 다음을 사용한다.
 
 ```bash
@@ -64,4 +66,4 @@ docker compose --profile runner up --build
 
 초기 단계는 SQLite를 사용합니다. 주문·체결 이력을 재시작 후에도 보존해야 할 실제 필요가 확인되면 PostgreSQL로 전환합니다.
 
-`DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`, `DJANGO_DB_PATH`는 환경 변수로 설정할 수 있습니다. 기본값은 로컬 개발 전용이며 배포 환경에서는 사용하지 않습니다.
+`DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`, `DJANGO_DB_PATH`, `TRADE_EXECUTION_LOG_ENABLED`는 환경 변수로 설정할 수 있습니다. 기본값은 로컬 개발 전용이며 배포 환경에서는 사용하지 않습니다.
