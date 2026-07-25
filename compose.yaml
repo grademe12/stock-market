@@ -12,6 +12,11 @@ services:
       - "8000:8000"
     volumes:
       - backend-data:/app/data
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 4G
     healthcheck:
       test:
         - CMD

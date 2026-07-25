@@ -30,6 +30,8 @@ docker compose up --build backend
 
 `http://127.0.0.1:8000/api/v1/health/`가 준비 상태 확인 endpoint다. SQLite의 트레이더 설정은 Docker named volume `backend-data`에 보존된다. 컨테이너를 내리려면 `make container-down`을 사용한다. volume까지 지우려면 명시적으로 `docker compose down --volumes`를 실행해야 한다.
 
+Compose 설정은 backend 컨테이너를 CPU 1코어(`cpus: "1.0"`)와 메모리 4GiB(`memory: 4G`)로 제한한다. 이는 이미지 자체가 아니라 로컬 Compose 실행 정책이다.
+
 외부 시장참여자까지 함께 실행하려면 활성 트레이더 프로필을 만든 후 다음을 사용한다.
 
 ```bash

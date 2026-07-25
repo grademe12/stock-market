@@ -5,7 +5,7 @@
 ## Configuration layers
 
 - **트레이더 설정**: `GET /api/v1/traders/`의 활성 프로필. 트레이더 수, 전략, 수량·가격 범위, TTL, 개별 실행 주기를 결정한다. 프론트엔드는 백엔드의 트레이더 CRUD API로 이를 관리한다.
-- **runner 환경 설정**: 컨테이너가 어느 백엔드에 어떤 범위·속도로 요청할지를 결정한다. `.env.example`을 복사해 사용한다.
+- **runner 환경 설정**: 컨테이너가 어느 백엔드에 어떤 범위·속도로 요청할지를 결정한다. `.env.example`을 `.env`로 복사해 개인 실행값을 저장한다. `.env`는 Git에서 제외된다.
 
 | Variable | Default | Meaning |
 |---|---:|---|
@@ -42,7 +42,7 @@ docker build -f participant-runner/Dockerfile -t stock-market-participant-runner
 
 ```bash
 docker run --rm --add-host=host.docker.internal:host-gateway \
-  --env-file participant-runner/.env.example \
+  --env-file participant-runner/.env \
   stock-market-participant-runner
 ```
 

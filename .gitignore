@@ -19,6 +19,7 @@ venv/
 .env
 .env.*
 !.env.example
+participant-runner/.env
 
 # IDE
 .idea/
