@@ -1,0 +1,40 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DJANGO_DEBUG: "1"
+      DJANGO_SECRET_KEY: local-container-development-key
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,backend
+      DJANGO_DB_PATH: /app/data/db.sqlite3
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend-data:/app/data
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/api/v1/health/', timeout=2)"
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  participant-runner:
+    profiles: ["runner"]
+    build:
+      context: .
+      dockerfile: participant-runner/Dockerfile
+    environment:
+      BACKEND_BASE_URL: http://backend:8000
+      TICK_INTERVAL_MS: "1000"
+      REQUEST_TIMEOUT_MS: "5000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  backend-data:

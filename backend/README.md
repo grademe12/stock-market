@@ -19,6 +19,23 @@ make backend-run
 {"status": "ok"}
 ```
 
+## Container run
+
+프로젝트 루트에서 실행합니다. backend는 Gunicorn **worker 1개**로 실행한다. 현재 호가창은 프로세스 메모리에 있으므로 worker를 늘리면 호가창이 분리되기 때문이다. `--threads 4`는 같은 프로세스 안에서 HTTP 요청을 처리할 수 있게 한다.
+
+```bash
+docker compose up --build backend
+# 또는 make container-backend-up
+```
+
+`http://127.0.0.1:8000/api/v1/health/`가 준비 상태 확인 endpoint다. SQLite의 트레이더 설정은 Docker named volume `backend-data`에 보존된다. 컨테이너를 내리려면 `make container-down`을 사용한다. volume까지 지우려면 명시적으로 `docker compose down --volumes`를 실행해야 한다.
+
+외부 시장참여자까지 함께 실행하려면 활성 트레이더 프로필을 만든 후 다음을 사용한다.
+
+```bash
+docker compose --profile runner up --build
+```
+
 ## Current API
 
 초기에는 `005930` 종목 하나만 메모리에서 처리합니다.
@@ -45,4 +62,4 @@ make backend-run
 
 초기 단계는 SQLite를 사용합니다. 주문·체결 이력을 재시작 후에도 보존해야 할 실제 필요가 확인되면 PostgreSQL로 전환합니다.
 
-`DJANGO_SECRET_KEY`와 `DJANGO_DEBUG`는 환경 변수로 설정할 수 있습니다. 기본값은 로컬 개발 전용이며 배포 환경에서는 사용하지 않습니다.
+`DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`, `DJANGO_DB_PATH`는 환경 변수로 설정할 수 있습니다. 기본값은 로컬 개발 전용이며 배포 환경에서는 사용하지 않습니다.

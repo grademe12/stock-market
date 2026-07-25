@@ -26,7 +26,7 @@ help: ## Show available targets
 BACKEND_DIR ?= backend
 BACKEND_PYTHON ?= $(BACKEND_DIR)/.venv/bin/python
 
-.PHONY: backend-setup backend-migrate backend-test backend-run participant-runner-test test run
+.PHONY: backend-setup backend-migrate backend-test backend-run participant-runner-test container-build container-backend-up container-down test run
 backend-setup: ## Create backend virtualenv and install dependencies
 	python3 -m venv $(BACKEND_DIR)/.venv
 	$(BACKEND_PYTHON) -m pip install --upgrade pip
@@ -43,6 +43,15 @@ backend-run: ## Start Django development server
 
 participant-runner-test: ## Run external participant runner tests
 	cd participant-runner && PYTHONPATH=../backend python3 -m unittest discover
+
+container-build: ## Build backend and participant-runner container images
+	docker compose build
+
+container-backend-up: ## Start only the packaged backend container
+	docker compose up --build backend
+
+container-down: ## Stop and remove project containers (keeps SQLite volume)
+	docker compose down
 
 test: backend-test ## Alias for backend-test
 

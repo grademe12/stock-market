@@ -29,6 +29,17 @@ observability/ 대시보드·알림 구성 (Stage 3부터)
 - Docker·kind·kubectl·helm은 Stage 3/6에서 필요해질 때 설치한다.
 - 환경별 설치 참고: [docs/UBUNTU_SETUP.md](docs/UBUNTU_SETUP.md)
 
+## 컨테이너 실행
+
+backend와 외부 시장참여자 runner는 각각 독립 이미지로 패키징된다. 현재 호가창은 한 프로세스의 메모리에 있으므로 backend 컨테이너는 Gunicorn worker 1개로 실행한다.
+
+```bash
+docker compose up --build backend
+# runner까지 실행: docker compose --profile runner up --build
+```
+
+상세 설정과 실행 순서는 [backend README](backend/README.md), [participant-runner README](participant-runner/README.md)를 참고한다.
+
 ## 진행 방식
 
 Stage 0~2에서는 `backend/`의 Django 단일 프로세스와 k6만 사용한다. `frontend/`는 독립적으로 유지하며, 아직 구현하지 않는다. 기술을 추가하기 전에는 반드시 현재 구조의 측정 결과와 도입 가설을 계획 문서에 정의된 형식으로 남긴다.
