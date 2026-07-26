@@ -7,6 +7,7 @@
 
 | 문서 | 내용 |
 |------|------|
+| [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md) | 프로젝트 목적과 현재 구현 범위 |
 | [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | 점진적 학습 단계와 기술 도입 기준 |
 | [docs/TRADING_PARTICIPANT_SIMULATION_PLAN.md](docs/TRADING_PARTICIPANT_SIMULATION_PLAN.md) | 가상 거래 참여자와 트레이더 설정 계획 |
 | [docs/DEMO_RUNBOOK.md](docs/DEMO_RUNBOOK.md) | 재현 가능한 backend·runner 실험 실행 절차 |
