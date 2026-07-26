@@ -44,3 +44,4 @@ charts/*/charts/
 # Logs & temp
 *.log
 tmp/
+.artifacts/

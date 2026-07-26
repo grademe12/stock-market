@@ -235,7 +235,7 @@ Redis, WebSocket, trading-bot은 이 단계에서도 필요성이 확인될 때�
 
 기존 PR-0.1/0.2에서 kind, Makefile, Prometheus/Grafana용 파일이 추가되어 있다. 이는 나중 Stage 3/6에서 재사용할 수 있지만, **현재 학습 진행 기준은 Stage 0부터 다시 시작**한다.
 
-S0.1/S0.2, Stage 1의 단일 프로세스 매칭 엔진, Stage 1.5의 NoiseTrader 참여자 시뮬레이션, Stage 1.6의 재현 가능한 데모 환경은 완료됐다. 다음 기본 작업은 **S2.1 — k6 steady 시나리오로 현재 HTTP 주문 API의 처리량과 지연 시간을 측정**하는 것이다. KRX 상위 100개 참조 데이터는 [별도 계획](./KRX_TOP100_REFERENCE_DATA_PLAN.md)에 따라 독립적으로 진행한다.
+S0.1/S0.2, Stage 1의 단일 프로세스 매칭 엔진, Stage 1.5의 NoiseTrader 참여자 시뮬레이션, Stage 1.6의 재현 가능한 데모 환경, S2.1/S2.2의 k6 steady 기준 측정은 완료됐다. 다음 기본 작업은 **S2.3 — Django middleware 기반의 메모리 토큰 버킷 global rate limit**이다. rate limit 도입 전후에는 같은 steady 시나리오와 `symbol-spike` 시나리오로 결과를 비교한다. KRX 상위 100개 참조 데이터는 [별도 계획](./KRX_TOP100_REFERENCE_DATA_PLAN.md)에 따라 독립적으로 진행한다.
 
 완료 기준:
 

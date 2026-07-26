@@ -43,5 +43,15 @@ services:
       backend:
         condition: service_healthy
 
+  k6:
+    profiles: ["loadtest"]
+    image: grafana/k6:latest
+    volumes:
+      - ./loadtest:/scripts:ro
+      - ./.artifacts/loadtest:/results
+    depends_on:
+      backend:
+        condition: service_healthy
+
 volumes:
   backend-data:

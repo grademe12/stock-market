@@ -27,8 +27,11 @@ BACKEND_DIR ?= backend
 BACKEND_PYTHON ?= $(BACKEND_DIR)/.venv/bin/python
 TRADER_COUNT ?= 100
 TRADER_SEED ?= 42
+ORDER_RATE ?= 10
+TEST_DURATION ?= 30s
+LOADTEST_ARTIFACTS_DIR ?= .artifacts/loadtest
 
-.PHONY: backend-setup backend-migrate backend-test backend-run participant-runner-test container-build container-backend-up container-down demo-up demo-seed demo-runner-up demo-logs demo-down test run
+.PHONY: backend-setup backend-migrate backend-test backend-run participant-runner-test container-build container-backend-up container-down demo-up demo-seed demo-runner-up demo-logs demo-down load-backend-up load-backend-stats load-steady test run
 backend-setup: ## Create backend virtualenv and install dependencies
 	python3 -m venv $(BACKEND_DIR)/.venv
 	$(BACKEND_PYTHON) -m pip install --upgrade pip
@@ -69,6 +72,27 @@ demo-logs: ## Follow backend and runner logs for the demo
 
 demo-down: ## Stop the reproducible demo containers (keeps SQLite volume)
 	docker compose --profile runner down
+
+load-backend-up: ## Start backend with execution logs disabled for a load test
+	TRADE_EXECUTION_LOG_ENABLED=0 docker compose up --build -d backend
+
+load-backend-stats: ## Print one backend CPU and memory snapshot during a load test
+	@backend_id=$$(docker compose ps -q backend); \
+	test -n "$$backend_id" || { echo "backend is not running; run make load-backend-up first"; exit 1; }; \
+	docker stats --no-stream --format 'cpu={{.CPUPerc}} memory={{.MemUsage}}' "$$backend_id"
+
+load-steady: ## Run the steady order-rate k6 scenario and save its JSON summary
+	@mkdir -p $(LOADTEST_ARTIFACTS_DIR)
+	@set -eu; \
+	backend_id=$$(docker compose ps -q backend); \
+	test -n "$$backend_id" || { echo "backend is not running; run make load-backend-up first"; exit 1; }; \
+	host_user="$$(id -u):$$(id -g)"; \
+	result_file=/results/steady-$(ORDER_RATE)ops-$(TEST_DURATION)-summary.json; \
+	TRADE_EXECUTION_LOG_ENABLED=0 docker compose --profile loadtest run --rm --no-deps \
+		--user "$$host_user" \
+		-e ORDER_RATE=$(ORDER_RATE) \
+		-e TEST_DURATION=$(TEST_DURATION) \
+		k6 run --quiet --summary-export "$$result_file" /scripts/scenarios/steady.js
 
 test: backend-test ## Alias for backend-test
 

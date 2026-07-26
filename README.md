@@ -9,6 +9,7 @@
 |------|------|
 | [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md) | 프로젝트 목적과 현재 구현 범위 |
 | [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | 점진적 학습 단계와 기술 도입 기준 |
+| [docs/LOAD_TEST_BASELINE.md](docs/LOAD_TEST_BASELINE.md) | k6 기준 부하 측정 조건과 결과 |
 | [docs/TRADING_PARTICIPANT_SIMULATION_PLAN.md](docs/TRADING_PARTICIPANT_SIMULATION_PLAN.md) | 가상 거래 참여자와 트레이더 설정 계획 |
 | [docs/DEMO_RUNBOOK.md](docs/DEMO_RUNBOOK.md) | 재현 가능한 backend·runner 실험 실행 절차 |
 | [docs/UBUNTU_SETUP.md](docs/UBUNTU_SETUP.md) | Ubuntu/WSL 1회 셋업 체크리스트 |
@@ -56,5 +57,5 @@ Stage 0~2에서는 `backend/`의 Django 단일 프로세스와 k6만 사용한�
 | Stage 0: Django/DRF 개발 기반 정리 | 완료 |
 | Stage 1: 단일 프로세스 매칭 엔진 | 완료 |
 | Stage 1.5: 거래 참여자 시뮬레이션 | 완료 (in-process 및 외부 HTTP NoiseTrader) |
-| Stage 2: k6 부하 테스트·기본 rate limit | 예정 |
+| Stage 2: k6 부하 테스트·기본 rate limit | 진행 중 (steady 기준 측정 완료, rate limit 예정) |
 | Stage 3+: 관측성·queue·영속화·K8s | 측정 결과에 따라 순차 도입 |
