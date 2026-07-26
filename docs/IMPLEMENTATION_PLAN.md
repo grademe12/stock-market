@@ -102,6 +102,22 @@ POST /api/v1/orders/
 
 **Exit gate**: 서로 교차하는 매수·매도 주문이 기대 가격과 시간 순서로 체결되고, `make backend-test`가 통과한다.
 
+### Stage 1.6 — 재현 가능한 참여자 데모
+
+**학습 질문**: 같은 거래 참여자 조건을 반복 실행해, 다음 Stage의 부하 측정 기준선을 만들 수 있는가?
+
+| 작업 | 완료 조건 |
+|---|---|
+| 결정론적 `seed_traders` 명령 | 같은 count·seed에서 같은 프로필을 upsert |
+| Compose runner 환경 설정 | 개인 `.env`의 runner 범위를 컨테이너에 주입 |
+| TTL 취소 idempotency | 체결된 주문의 지연 취소가 오류 로그를 만들지 않음 |
+| runner 상태 요약 | tick·제출·취소·이미 종료된 주문·실패 수 확인 |
+| demo runbook | backend, seed, runner, 종료 순서를 한 번에 재현 |
+
+**Kubernetes 경계**: backend와 runner는 모두 replica 1개만 허용한다. in-memory order book 또는 profile sharding 문제가 해결되기 전에는 HPA/다중 replica를 사용하지 않는다. 자세한 계약은 [DEMO_RUNBOOK.md](./DEMO_RUNBOOK.md)에 둔다.
+
+**Exit gate**: 빈 Docker 환경에서 `make demo-up`, `make demo-seed`, `make demo-runner-up`으로 같은 참여자 흐름을 재현하고, `make backend-test`, `make participant-runner-test`가 통과한다.
+
 ### Stage 2 — 부하 생성과 기본 보호
 
 **학습 질문**: 부하가 증가할 때 처리량, 지연 시간, 실패율은 어떻게 달라지는가?
@@ -219,7 +235,7 @@ Redis, WebSocket, trading-bot은 이 단계에서도 필요성이 확인될 때�
 
 기존 PR-0.1/0.2에서 kind, Makefile, Prometheus/Grafana용 파일이 추가되어 있다. 이는 나중 Stage 3/6에서 재사용할 수 있지만, **현재 학습 진행 기준은 Stage 0부터 다시 시작**한다.
 
-S0.1/S0.2, Stage 1의 단일 프로세스 매칭 엔진, Stage 1.5의 NoiseTrader 참여자 시뮬레이션은 완료됐다. Stage 1.5에는 백엔드와 분리돼 HTTP 요청을 보내는 `participant-runner`도 포함된다. 다음 기본 작업은 **S2.1 — k6 steady 시나리오로 현재 HTTP 주문 API의 처리량과 지연 시간을 측정**하는 것이다. KRX 상위 100개 참조 데이터는 [별도 계획](./KRX_TOP100_REFERENCE_DATA_PLAN.md)에 따라 독립적으로 진행한다.
+S0.1/S0.2, Stage 1의 단일 프로세스 매칭 엔진, Stage 1.5의 NoiseTrader 참여자 시뮬레이션, Stage 1.6의 재현 가능한 데모 환경은 완료됐다. 다음 기본 작업은 **S2.1 — k6 steady 시나리오로 현재 HTTP 주문 API의 처리량과 지연 시간을 측정**하는 것이다. KRX 상위 100개 참조 데이터는 [별도 계획](./KRX_TOP100_REFERENCE_DATA_PLAN.md)에 따라 독립적으로 진행한다.
 
 완료 기준:
 

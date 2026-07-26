@@ -3,9 +3,9 @@ from unittest import TestCase
 from exchange.orderbook import OrderSide
 from exchange.participants.types import OrderIntent
 
-from participant_runner.client import OrderAlreadyClosedError, SubmittedOrder
+from participant_runner.client import CancellationResult, SubmittedOrder
 from participant_runner.profiles import build_participants
-from participant_runner.runner import ParticipantRunner
+from participant_runner.runner import ParticipantRunner, run_until_stopped
 
 
 class StaticParticipant:
@@ -26,10 +26,23 @@ class FakeBackendClient:
         self.submissions.append(intent)
         return SubmittedOrder(order_id=f"order-{len(self.submissions)}", remaining_quantity=1)
 
-    def cancel_order(self, order_id: str) -> None:
+    def cancel_order(self, order_id: str) -> CancellationResult:
         if order_id in self.closed_order_ids:
-            raise OrderAlreadyClosedError(404, "already filled")
+            return CancellationResult(status="ALREADY_CLOSED")
         self.canceled_order_ids.append(order_id)
+        return CancellationResult(status="CANCELED")
+
+
+class StopAfterFirstWait:
+    def __init__(self) -> None:
+        self._stopped = False
+
+    def is_set(self) -> bool:
+        return self._stopped
+
+    def wait(self, timeout: float) -> bool:
+        self._stopped = True
+        return True
 
 
 class ParticipantRunnerTests(TestCase):
@@ -123,3 +136,33 @@ class ParticipantRunnerTests(TestCase):
 
         self.assertEqual(len(participants), 1)
         self.assertEqual(participants[0].user_id, "noise-1")
+
+    def test_runner_emits_periodic_status_and_cleans_up_on_stop(self) -> None:
+        client = FakeBackendClient()
+        runner = ParticipantRunner(
+            client,
+            (
+                StaticParticipant(
+                    OrderIntent(
+                        user_id="external-noise-1",
+                        symbol="005930",
+                        side=OrderSide.BUY,
+                        price=70_000,
+                        quantity=1,
+                        order_ttl_ticks=2,
+                    )
+                ),
+            ),
+        )
+
+        with self.assertLogs(level="INFO") as logs:
+            status = run_until_stopped(
+                runner,
+                tick_interval_ms=1_000,
+                status_log_interval_ticks=1,
+                stop_event=StopAfterFirstWait(),
+            )
+
+        self.assertIn("event=runner_status", logs.output[0])
+        self.assertEqual(status.orders_canceled_total, 1)
+        self.assertEqual(status.open_runner_orders, 0)

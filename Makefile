@@ -25,8 +25,10 @@ help: ## Show available targets
 
 BACKEND_DIR ?= backend
 BACKEND_PYTHON ?= $(BACKEND_DIR)/.venv/bin/python
+TRADER_COUNT ?= 100
+TRADER_SEED ?= 42
 
-.PHONY: backend-setup backend-migrate backend-test backend-run participant-runner-test container-build container-backend-up container-down test run
+.PHONY: backend-setup backend-migrate backend-test backend-run participant-runner-test container-build container-backend-up container-down demo-up demo-seed demo-runner-up demo-logs demo-down test run
 backend-setup: ## Create backend virtualenv and install dependencies
 	python3 -m venv $(BACKEND_DIR)/.venv
 	$(BACKEND_PYTHON) -m pip install --upgrade pip
@@ -52,6 +54,21 @@ container-backend-up: ## Start only the packaged backend container
 
 container-down: ## Stop and remove project containers (keeps SQLite volume)
 	docker compose down
+
+demo-up: ## Start the packaged backend for the reproducible demo
+	docker compose up --build -d backend
+
+demo-seed: ## Create deterministic demo trader profiles in the running backend
+	docker compose exec -T backend python manage.py seed_traders --count $(TRADER_COUNT) --seed $(TRADER_SEED)
+
+demo-runner-up: ## Start the external participant runner with the local .env settings
+	docker compose --profile runner up --build -d participant-runner
+
+demo-logs: ## Follow backend and runner logs for the demo
+	docker compose --profile runner logs -f backend participant-runner
+
+demo-down: ## Stop the reproducible demo containers (keeps SQLite volume)
+	docker compose --profile runner down
 
 test: backend-test ## Alias for backend-test
 

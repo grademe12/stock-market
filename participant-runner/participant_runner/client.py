@@ -13,14 +13,15 @@ class BackendApiError(RuntimeError):
         self.status_code = status_code
 
 
-class OrderAlreadyClosedError(BackendApiError):
-    pass
-
-
 @dataclass(frozen=True, slots=True)
 class SubmittedOrder:
     order_id: str
     remaining_quantity: int
+
+
+@dataclass(frozen=True, slots=True)
+class CancellationResult:
+    status: str
 
 
 class BackendApiClient:
@@ -56,13 +57,15 @@ class BackendApiClient:
         except (KeyError, TypeError, ValueError) as exc:
             raise BackendApiError(None, "order response has an invalid shape") from exc
 
-    def cancel_order(self, order_id: str) -> None:
+    def cancel_order(self, order_id: str) -> CancellationResult:
+        payload = self._request("DELETE", f"/api/v1/orders/{order_id}/")
         try:
-            self._request("DELETE", f"/api/v1/orders/{order_id}/")
-        except BackendApiError as exc:
-            if exc.status_code == 404:
-                raise OrderAlreadyClosedError(exc.status_code, str(exc)) from exc
-            raise
+            result = CancellationResult(status=str(payload["status"]))
+        except (KeyError, TypeError) as exc:
+            raise BackendApiError(None, "cancel response has an invalid shape") from exc
+        if result.status not in {"CANCELED", "ALREADY_CLOSED"}:
+            raise BackendApiError(None, f"unexpected cancel status: {result.status}")
+        return result
 
     def _request(
         self,

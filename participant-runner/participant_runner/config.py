@@ -26,6 +26,7 @@ class RunnerConfig:
     backend_base_url: str
     tick_interval_ms: int
     request_timeout_ms: int
+    status_log_interval_ticks: int
     max_traders: int | None
     trader_ids: tuple[str, ...]
 
@@ -47,6 +48,9 @@ class RunnerConfig:
             backend_base_url=backend_base_url,
             tick_interval_ms=_positive_int("TICK_INTERVAL_MS", 1_000) or 1_000,
             request_timeout_ms=_positive_int("REQUEST_TIMEOUT_MS", 5_000) or 5_000,
+            status_log_interval_ticks=(
+                _positive_int("RUNNER_STATUS_LOG_INTERVAL_TICKS", 60) or 60
+            ),
             max_traders=_positive_int("MAX_TRADERS"),
             trader_ids=trader_ids,
         )

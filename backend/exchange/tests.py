@@ -1,6 +1,7 @@
 from rest_framework.test import APITestCase
 from django.urls import reverse
 from django.test import override_settings
+from django.core.management import call_command
 
 from exchange import views
 from exchange.models import TraderProfile
@@ -64,6 +65,16 @@ class OrderApiTests(APITestCase):
         self.assertEqual(cancel_response.status_code, 200)
         self.assertEqual(cancel_response.data["canceled_qty"], 3)
         self.assertEqual(empty_book_response.data["bids"], [])
+
+    def test_cancel_is_idempotent_when_an_order_is_already_closed(self):
+        order_id = self.submit_order().data["order_id"]
+        self.client.delete(reverse("order-cancel", args=[order_id]))
+
+        response = self.client.delete(reverse("order-cancel", args=[order_id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], "ALREADY_CLOSED")
+        self.assertEqual(response.data["canceled_qty"], 0)
 
     def test_invalid_order_is_rejected(self):
         response = self.submit_order(side="INVALID")
@@ -219,3 +230,27 @@ class TraderProfileApiTests(APITestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("symbol", response.data)
+
+
+class SeedTradersCommandTests(APITestCase):
+    def test_seed_command_is_deterministic_and_idempotent(self):
+        call_command("seed_traders", count=3, seed=42)
+        fields = (
+            "name",
+            "user_id",
+            "reference_price",
+            "price_step",
+            "max_offset_steps",
+            "quantity_min",
+            "quantity_max",
+            "order_ttl_ticks",
+            "interval_ticks",
+            "seed",
+        )
+        first_run = list(TraderProfile.objects.order_by("user_id").values_list(*fields))
+
+        call_command("seed_traders", count=3, seed=42)
+        second_run = list(TraderProfile.objects.order_by("user_id").values_list(*fields))
+
+        self.assertEqual(TraderProfile.objects.count(), 3)
+        self.assertEqual(first_run, second_run)

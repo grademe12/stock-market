@@ -40,6 +40,17 @@ Compose 설정은 backend 컨테이너를 CPU 1코어(`cpus: "1.0"`)와 메모�
 docker compose --profile runner up --build
 ```
 
+재현 가능한 데모는 아래 명령으로 실행한다. `seed_traders`는 `random-noise-user-001`부터 결정론적으로 upsert하며, 직접 만든 다른 트레이더는 변경하지 않는다.
+
+```bash
+make demo-up
+make demo-seed TRADER_COUNT=100 TRADER_SEED=42
+make demo-runner-up
+make demo-logs
+```
+
+정리와 상세 실행 순서는 [데모 runbook](../docs/DEMO_RUNBOOK.md)을 참고한다.
+
 ## Current API
 
 초기에는 `005930` 종목 하나만 메모리에서 처리합니다.
@@ -57,6 +68,8 @@ docker compose --profile runner up --build
 | `GET` / `DELETE /api/v1/simulations/participants/` | 참여자 시뮬레이션 상태 조회 / 중지 |
 
 주문 API의 입력은 `user_id`, `symbol`, `side` (`BUY` 또는 `SELL`), `price`, `qty`다. 가격과 수량은 양의 정수만 허용한다.
+
+주문 취소는 idempotent하다. 열린 주문은 `status: CANCELED`로 취소되고, 이미 체결·취소되어 호가창에 없는 주문은 `status: ALREADY_CLOSED`로 정상 응답한다. 이는 TTL 기반 runner의 지연 취소를 오류와 구분하기 위한 현재 단계의 계약이다.
 
 트레이더 설정은 SQLite의 `TraderProfile`로 보관하며, 프론트엔드가 위 API를 통해 그대로 편집할 수 있다. 설정에는 이름·가상 사용자 ID·활성화 여부·종목·기준가·가격 단위·가격 오프셋·수량 범위·주문 TTL·개별 실행 주기·seed가 포함된다. 현재 지원 전략은 `noise`, 종목은 `005930` 하나다.
 

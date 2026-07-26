@@ -5,13 +5,13 @@ from typing import Protocol
 
 from exchange.participants.types import OrderIntent
 
-from participant_runner.client import BackendApiError, OrderAlreadyClosedError, SubmittedOrder
+from participant_runner.client import BackendApiError, CancellationResult, SubmittedOrder
 
 
 class BackendClient(Protocol):
     def submit_order(self, intent: OrderIntent) -> SubmittedOrder: ...
 
-    def cancel_order(self, order_id: str) -> None: ...
+    def cancel_order(self, order_id: str) -> CancellationResult: ...
 
 
 class Participant(Protocol):
@@ -95,10 +95,11 @@ class ParticipantRunner:
 
     def _cancel(self, order_id: str) -> None:
         try:
-            self._client.cancel_order(order_id)
-            self._orders_canceled += 1
-        except OrderAlreadyClosedError:
-            self._orders_already_closed += 1
+            result = self._client.cancel_order(order_id)
+            if result.status == "ALREADY_CLOSED":
+                self._orders_already_closed += 1
+            else:
+                self._orders_canceled += 1
         except BackendApiError as exc:
             self._request_failures += 1
             logging.warning("order cancellation failed: %s", exc)
@@ -109,10 +110,22 @@ class ParticipantRunner:
 def run_until_stopped(
     runner: ParticipantRunner,
     tick_interval_ms: int,
+    status_log_interval_ticks: int,
     stop_event: Event,
 ) -> RunnerStatus:
     while not stop_event.is_set():
-        runner.tick_once()
+        status = runner.tick_once()
+        if status.ticks_total % status_log_interval_ticks == 0:
+            logging.info(
+                "event=runner_status ticks=%s submitted=%s canceled=%s already_closed=%s "
+                "request_failures=%s open_orders=%s",
+                status.ticks_total,
+                status.orders_submitted_total,
+                status.orders_canceled_total,
+                status.orders_already_closed_total,
+                status.request_failures_total,
+                status.open_runner_orders,
+            )
         if stop_event.wait(tick_interval_ms / 1_000):
             break
     return runner.cancel_all_open_orders()

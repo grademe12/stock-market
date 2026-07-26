@@ -5,7 +5,7 @@ services:
       dockerfile: backend/Dockerfile
     environment:
       DJANGO_DEBUG: "1"
-      TRADE_EXECUTION_LOG_ENABLED: "1"
+      TRADE_EXECUTION_LOG_ENABLED: ${TRADE_EXECUTION_LOG_ENABLED:-1}
       DJANGO_SECRET_KEY: local-container-development-key
       DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,backend
       DJANGO_DB_PATH: /app/data/db.sqlite3
@@ -34,10 +34,11 @@ services:
     build:
       context: .
       dockerfile: participant-runner/Dockerfile
+    env_file:
+      - path: ./participant-runner/.env
+        required: false
     environment:
       BACKEND_BASE_URL: http://backend:8000
-      TICK_INTERVAL_MS: "1000"
-      REQUEST_TIMEOUT_MS: "5000"
     depends_on:
       backend:
         condition: service_healthy

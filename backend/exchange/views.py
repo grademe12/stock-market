@@ -71,8 +71,16 @@ def book_detail(request, symbol: str):
 def cancel_order(request, order_id: UUID):
     try:
         canceled_order = order_book.cancel(order_id)
-    except OrderNotFoundError as exc:
-        raise NotFound("open order was not found") from exc
+    except OrderNotFoundError:
+        # A TTL-based client can race a fill. Cancellation is intentionally
+        # idempotent even though this early in-memory engine has no history.
+        return Response(
+            {
+                "order_id": str(order_id),
+                "status": "ALREADY_CLOSED",
+                "canceled_qty": 0,
+            }
+        )
 
     return Response(
         {

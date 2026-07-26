@@ -41,7 +41,14 @@ def main() -> int:
     logging.info("runner started; press Ctrl+C to stop")
     logging.info(
         "runner stopped: %s",
-        asdict(run_until_stopped(runner, config.tick_interval_ms, stop_event)),
+        asdict(
+            run_until_stopped(
+                runner,
+                config.tick_interval_ms,
+                config.status_log_interval_ticks,
+                stop_event,
+            )
+        ),
     )
     return 0
 

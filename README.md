@@ -9,6 +9,7 @@
 |------|------|
 | [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | 점진적 학습 단계와 기술 도입 기준 |
 | [docs/TRADING_PARTICIPANT_SIMULATION_PLAN.md](docs/TRADING_PARTICIPANT_SIMULATION_PLAN.md) | 가상 거래 참여자와 트레이더 설정 계획 |
+| [docs/DEMO_RUNBOOK.md](docs/DEMO_RUNBOOK.md) | 재현 가능한 backend·runner 실험 실행 절차 |
 | [docs/UBUNTU_SETUP.md](docs/UBUNTU_SETUP.md) | Ubuntu/WSL 1회 셋업 체크리스트 |
 
 ## 프로젝트 구조
