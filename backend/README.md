@@ -28,7 +28,7 @@ docker compose up --build backend
 # 또는 make container-backend-up
 ```
 
-`http://127.0.0.1:8000/api/v1/health/`가 준비 상태 확인 endpoint다. SQLite의 트레이더 설정은 Docker named volume `backend-data`에 보존된다. 컨테이너를 내리려면 `make container-down`을 사용한다. volume까지 지우려면 명시적으로 `docker compose down --volumes`를 실행해야 한다.
+`http://127.0.0.1:8000/api/v1/health/`가 준비 상태 확인 endpoint다. Compose backend는 별도 PostgreSQL 컨테이너를 사용하며 데이터는 named volume `postgres-data`에 보존된다. 컨테이너를 내리려면 `make container-down`을 사용한다. volume까지 지우려면 명시적으로 `docker compose down --volumes`를 실행해야 한다.
 
 Compose 설정은 backend 컨테이너를 CPU 1코어(`cpus: "1.0"`)와 메모리 4GiB(`memory: 4G`)로 제한한다. 이는 이미지 자체가 아니라 로컬 Compose 실행 정책이다.
 
@@ -71,12 +71,24 @@ make demo-logs
 
 주문 취소는 idempotent하다. 열린 주문은 `status: CANCELED`로 취소되고, 이미 체결·취소되어 호가창에 없는 주문은 `status: ALREADY_CLOSED`로 정상 응답한다. 이는 TTL 기반 runner의 지연 취소를 오류와 구분하기 위한 현재 단계의 계약이다.
 
-트레이더 설정은 SQLite의 `TraderProfile`로 보관하며, 프론트엔드가 위 API를 통해 그대로 편집할 수 있다. 설정에는 이름·가상 사용자 ID·활성화 여부·종목·기준가·가격 단위·가격 오프셋·수량 범위·주문 TTL·개별 실행 주기·seed가 포함된다. 현재 지원 전략은 `noise`, 종목은 `005930` 하나다.
+트레이더 설정은 PostgreSQL의 `TraderProfile`로 보관하며, 프론트엔드가 위 API를 통해 그대로 편집할 수 있다. 설정에는 이름·가상 사용자 ID·활성화 여부·종목·기준가·가격 단위·가격 오프셋·수량 범위·주문 TTL·개별 실행 주기·seed가 포함된다. 현재 지원 전략은 `noise`, 종목은 `005930` 하나다.
 
 활성화된 설정이 하나 이상 있으면 시뮬레이션은 해당 트레이더들만 실행한다. 설정이 아직 없을 때만 기존 요청의 `participants` 값으로 임시 NoiseTrader를 생성한다. `trader_ids` 배열을 start/tick 요청에 넣으면 실행할 활성 트레이더를 명시적으로 고를 수 있다. 설정 변경은 다음 시뮬레이션 시작에 반영한다.
 
 트레이더 설정 변경과 참여자 시뮬레이션 제어는 `DEBUG`가 활성화된 로컬 개발 환경에서만 허용한다. `NoiseTrader`는 재현 가능한 seed를 기반으로 여러 가상 사용자의 매수·매도 지정가 주문을 생성한다. 시뮬레이션을 중지하면 남은 봇 주문은 취소된다.
 
-초기 단계는 SQLite를 사용합니다. 주문·체결 이력을 재시작 후에도 보존해야 할 실제 필요가 확인되면 PostgreSQL로 전환합니다.
+Compose 환경은 KRX 참조 데이터와 트레이더 설정을 PostgreSQL에 저장한다. 주문·체결과 호가창은 아직 메모리에만 있으며 backend 재시작 시 초기화된다. 로컬 `make backend-test`는 빠른 단위 테스트를 위해 SQLite를 사용한다.
 
-`DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`, `DJANGO_DB_PATH`, `TRADE_EXECUTION_LOG_ENABLED`는 환경 변수로 설정할 수 있습니다. 기본값은 로컬 개발 전용이며 배포 환경에서는 사용하지 않습니다.
+`DATABASE_ENGINE`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`, `KRX_API_KEY`, `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`, `TRADE_EXECUTION_LOG_ENABLED`는 환경 변수로 설정할 수 있습니다. 기본값은 로컬 개발 전용이며 배포 환경에서는 사용하지 않습니다.
+
+## KRX reference import
+
+`db/.env.example`을 참고해 Git에서 제외된 `db/.env`를 준비한 후 실행한다.
+
+```bash
+make db-up
+make db-migrate
+make import-krx-top100
+```
+
+명령은 최근 확정 거래일의 KOSPI 거래대금 상위 100개를 `Symbol`과 `MarketDaily`에 upsert하고 `ReferenceImportRun`에 실행 상태를 기록한다. KRX API의 `유가증권 일별매매정보` 활용승인이 없는 키는 HTTP 401로 거절된다.

@@ -72,22 +72,34 @@ NoiseTrader는 호가창 상태를 읽거나 가격을 예측하지 않는다. �
 
 트레이더 프로필은 주문 행동을 정의하는 설정 데이터다. 아직 현금, 보유 종목, 잔고 검증, 결제 기능은 포함하지 않는다.
 
+### KRX 참조 데이터
+
+- 별도 PostgreSQL 컨테이너에 종목·일별 데이터와 수집 실행 이력 저장
+- KRX 유가증권 일별매매정보에서 최근 확정 거래일 탐색
+- KOSPI 거래대금 상위 100개와 종가·거래량·거래대금·순위 적재
+- 동일 거래일 재실행 시 중복 없이 정확히 100개 유지
+- API 키와 PostgreSQL 자격정보를 Git·Docker build context에서 제외
+
+KRX 종목 풀은 아직 주문 API와 메모리 호가창에 연결하지 않았다. 현재 matcher는 계속 개발용 단일 종목 `005930`만 처리한다.
+
 ### 실행 환경과 검증
 
 - backend와 participant-runner를 각각 독립 Docker 이미지로 패키징
 - Docker Compose로 backend만 또는 runner 포함 데모 실행
 - backend 컨테이너 자원 제한: CPU 1개, 메모리 4GiB
-- SQLite 데이터는 Docker volume에 유지하며, 트레이더 프로필은 재시작 뒤에도 남음
+- PostgreSQL 데이터는 Docker volume에 유지하며, 트레이더 프로필과 KRX 참조 데이터는 재시작 뒤에도 남음
 - backend 단위 테스트와 participant-runner 단위 테스트 제공
 - 동일한 입력을 재현하는 데모 실행 절차 제공
 
 ## 현재 상태
 
-기본 거래 기능, 가상 시장참여자, 컨테이너 기반의 재현 가능한 실행 환경까지 구현됐다. 성능 측정과 부하 제어는 아직 시작하지 않았으며, 현재 구현은 그 측정을 위한 기준 환경이다.
+기본 거래 기능, 가상 시장참여자, 컨테이너 기반 실행 환경, k6 steady 기준 측정, PostgreSQL과 KRX KOSPI 상위 100개 적재까지 구현됐다. rate limit·spike 실험과 정규장 세션 자동화는 아직 구현하지 않았다.
 
 ## 관련 문서
 
 - [점진적 구현 계획](IMPLEMENTATION_PLAN.md)
+- [KRX KOSPI 상위 100개 적재](KRX_TOP100_REFERENCE_DATA_PLAN.md)
+- [k6 기준 부하 측정](LOAD_TEST_BASELINE.md)
 - [참여자 데모 실행 절차](DEMO_RUNBOOK.md)
 - [backend 사용 안내](../backend/README.md)
 - [participant-runner 사용 안내](../participant-runner/README.md)

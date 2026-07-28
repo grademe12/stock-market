@@ -30,7 +30,6 @@
 
 - Kubernetes, Helm, KEDA, HPA, PDB, NetworkPolicy
 - Redpanda/Kafka, Redis, WebSocket, trading-bot
-- 외부 KRX/pykrx 수집, PostgreSQL 영속화
 - 다종목 분리와 마이크로서비스화
 
 이 항목들은 제거한 것이 아니라, 각 항목이 해결할 실제 문제가 생긴 뒤의 단계로 미룬다.
@@ -42,9 +41,10 @@
 ```mermaid
 flowchart LR
     S1[Stage 1\nDjango in-memory matcher] --> S2[Stage 2\nHTTP API + k6]
-    S2 --> S3[Stage 3\nPrometheus + Grafana]
+    S2 --> S25[Stage 2.5\nPostgreSQL + KRX reference]
+    S25 --> S3[Stage 3\nPrometheus + Grafana]
     S3 --> S4[Stage 4\nRedpanda + async matcher]
-    S4 --> S5[Stage 5\nPostgreSQL + service split]
+    S4 --> S5[Stage 5\nTrade persistence + service boundary]
     S5 --> S6[Stage 6\nkind + Helm + KEDA]
 ```
 
@@ -133,6 +133,23 @@ POST /api/v1/orders/
 
 **Exit gate**: `make load-steady`와 `make load-symbol-spike`가 실행되고, rate limit 유무에 따른 결과 차이를 설명할 수 있다.
 
+### Stage 2.5 — PostgreSQL과 KRX 참조 데이터
+
+**학습 질문**: 정규장 자동 운영에 필요한 종목 풀과 기준가를 외부 참조 데이터에서 안전하고 재현 가능하게 준비할 수 있는가?
+
+| PR | 작업 | 완료 조건 |
+|---|---|---|
+| S2.5.1 | Compose PostgreSQL과 Django 연결 | migration·재시작 후 데이터 보존 |
+| S2.5.2 | KRX client와 `Symbol`, `MarketDaily`, `ReferenceImportRun` | fixture parsing과 실패 이력 테스트 성공 |
+| S2.5.3 | KOSPI 거래대금 상위 100개 원자적 upsert | 동일 날짜 재실행 시 정확히 100개 유지 |
+| S2.5.4 | 실제 KRX 최근 확정 거래일 적재 | API 활용승인 후 PostgreSQL에서 100개 확인 |
+
+주문·체결 상태는 계속 메모리에 둔다. PostgreSQL 도입은 참조 데이터와 트레이더 설정의 영속화를 위한 것이며, matcher 수평 확장을 의미하지 않는다.
+
+**Exit gate**: `make import-krx-top100`이 최근 확정 KOSPI 상위 100개를 저장하고, 키가 로그나 저장소에 노출되지 않는다.
+
+**상태**: 2026-07-28 완료. 최근 확정 거래일 2026-07-27의 100개를 적재했고, 동일 날짜 재실행과 PostgreSQL 재시작 후에도 100개가 유지되는 것을 확인했다.
+
 ### Stage 3 — 애플리케이션 관측성
 
 **학습 질문**: k6 결과 밖에서도 서비스가 왜 느려졌는지 알 수 있는가?
@@ -176,10 +193,10 @@ POST /api/v1/orders/
 
 | PR | 작업 | 완료 조건 |
 |---|---|---|
-| S5.1 | Django ORM + PostgreSQL에 trades/orders 최소 이력 저장 | 재시작 후 체결 이력 조회 가능 |
+| S5.1 | 기존 PostgreSQL에 trades/orders 최소 이력 저장 | 재시작 후 체결 이력 조회 가능 |
 | S5.2 | account reserve 또는 settlement 중 하나만 분리 | 잔고 부족 주문이 거절됨 |
 | S5.3 | 두 번째 종목 `035420` 추가 | 종목별 지표를 비교 가능 |
-| S5.4 | 기준가가 필요할 경우에만 pykrx ingest 추가 | 두 종목의 seed price 적재 |
+| S5.4 | 저장된 KRX 종목 풀을 matcher 기준가에 연결 | 두 종목의 seed price 적재 |
 
 Redis, WebSocket, trading-bot은 이 단계에서도 필요성이 확인될 때만 별도 PR로 추가한다.
 
@@ -235,7 +252,7 @@ Redis, WebSocket, trading-bot은 이 단계에서도 필요성이 확인될 때�
 
 기존 PR-0.1/0.2에서 kind, Makefile, Prometheus/Grafana용 파일이 추가되어 있다. 이는 나중 Stage 3/6에서 재사용할 수 있지만, **현재 학습 진행 기준은 Stage 0부터 다시 시작**한다.
 
-S0.1/S0.2, Stage 1의 단일 프로세스 매칭 엔진, Stage 1.5의 NoiseTrader 참여자 시뮬레이션, Stage 1.6의 재현 가능한 데모 환경, S2.1/S2.2의 k6 steady 기준 측정은 완료됐다. 다음 기본 작업은 **S2.3 — Django middleware 기반의 메모리 토큰 버킷 global rate limit**이다. rate limit 도입 전후에는 같은 steady 시나리오와 `symbol-spike` 시나리오로 결과를 비교한다. KRX 상위 100개 참조 데이터는 [별도 계획](./KRX_TOP100_REFERENCE_DATA_PLAN.md)에 따라 독립적으로 진행한다.
+S0.1/S0.2, Stage 1의 단일 프로세스 매칭 엔진, Stage 1.5의 NoiseTrader 참여자 시뮬레이션, Stage 1.6의 재현 가능한 데모 환경, S2.1/S2.2의 k6 steady 기준 측정, Stage 2.5의 PostgreSQL·KRX KOSPI 상위 100개 적재는 완료됐다. 다음 작업은 **S2.3/S2.4의 rate limit·spike 실험** 또는 정규장 세션 자동화 설계 중 하나를 선택해 진행한다.
 
 완료 기준:
 
@@ -244,7 +261,7 @@ make backend-setup
 make backend-test
 ```
 
-가 성공하고, `GET /api/v1/health/`가 200을 반환해야 한다. 초기에는 Django 기본 SQLite만 사용하며, Docker·Kubernetes·외부 데이터베이스는 도입하지 않는다. 프론트엔드는 독립된 `frontend/` 디렉터리에 두며, 이 단계에서는 앱을 생성하지 않는다.
+가 성공하고, `GET /api/v1/health/`가 200을 반환해야 한다. 로컬 단위 테스트는 SQLite를 사용할 수 있지만 Compose backend는 PostgreSQL을 사용한다. 프론트엔드는 독립된 `frontend/` 디렉터리에 두며, 아직 앱을 생성하지 않는다.
 
 ---
 
@@ -253,15 +270,15 @@ make backend-test
 | 기술/기능 | 가장 이른 도입 단계 | 도입 근거 |
 |---|---:|---|
 | k6 | Stage 2 | 부하를 수치로 재현 |
+| PostgreSQL | Stage 2.5 | KRX 참조 데이터와 설정 영속화 |
+| KRX Open API | Stage 2.5 | KOSPI 종목 풀과 최근 확정 종가 |
 | Prometheus/Grafana | Stage 3 | 서비스 내부 원인 관측 |
-| Docker Compose | Stage 3 | 관측성 도구를 반복 실행 |
+| Docker Compose | Stage 1.6 | backend·runner·PostgreSQL 반복 실행 |
 | Redpanda | Stage 4 | 비동기 처리와 lag 학습 |
-| PostgreSQL | Stage 5 | 재시작 후 이력·계좌 상태 필요 |
-| pykrx | Stage 5 | 고정 시드 가격이 실험을 제한할 때 |
 | Redis | Stage 5 이후 | snapshot/cache 문제가 실제로 생길 때 |
 | WebSocket | Stage 5 이후 | 시세 fanout을 실험할 때 |
 | kind/Helm/HPA/KEDA | Stage 6 | 오케스트레이션·autoscaling 실험 |
 
 ---
 
-*Last updated: 2026-07-25 — Django + Django REST Framework 기반으로 전환*
+*Last updated: 2026-07-28 — PostgreSQL + KRX reference data 단계 반영*

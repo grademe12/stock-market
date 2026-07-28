@@ -1,9 +1,4 @@
-"""Development settings for the exchange backend.
-
-SQLite is intentionally used during the early learning stages for local
-development configuration. PostgreSQL is introduced only when durable trade
-and account state becomes necessary.
-"""
+"""Settings for local development and the packaged backend."""
 
 from pathlib import Path
 import os
@@ -60,12 +55,30 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": os.getenv("DJANGO_DB_PATH", BASE_DIR / "db.sqlite3"),
-    },
-}
+DATABASE_ENGINE = os.getenv("DATABASE_ENGINE", "sqlite")
+
+if DATABASE_ENGINE == "postgresql":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("POSTGRES_DB", "stock_market"),
+            "USER": os.getenv("POSTGRES_USER", "stock_market"),
+            "PASSWORD": os.getenv("POSTGRES_PASSWORD", ""),
+            "HOST": os.getenv("POSTGRES_HOST", "postgres"),
+            "PORT": os.getenv("POSTGRES_PORT", "5432"),
+            "CONN_MAX_AGE": 60,
+            "CONN_HEALTH_CHECKS": True,
+        },
+    }
+elif DATABASE_ENGINE == "sqlite":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": os.getenv("DJANGO_DB_PATH", BASE_DIR / "db.sqlite3"),
+        },
+    }
+else:
+    raise RuntimeError("DATABASE_ENGINE must be 'sqlite' or 'postgresql'")
 
 AUTH_PASSWORD_VALIDATORS: list[dict[str, str]] = []
 

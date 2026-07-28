@@ -19,6 +19,7 @@
 ```text
 backend/       Django + Django REST Framework 거래소 API와 매칭 엔진
 participant-runner/ 별도 프로세스/컨테이너로 실행되는 HTTP 시장참여자
+db/            PostgreSQL·KRX 환경 설정 (실제 `.env`는 Git 제외)
 frontend/      향후 웹 클라이언트 (현재는 계획만 존재)
 docs/          구현·학습 계획
 loadtest/      부하 테스트 시나리오 (Stage 2부터)
@@ -29,7 +30,7 @@ observability/ 대시보드·알림 구성 (Stage 3부터)
 ## 현재 단계의 사전 요구사항
 
 - Python 3.12 이상, make
-- Docker·kind·kubectl·helm은 Stage 3/6에서 필요해질 때 설치한다.
+- Docker는 현재 Compose 실행과 PostgreSQL에 필요하다. kind·kubectl·helm은 Stage 6에서 필요해질 때 설치한다.
 - 환경별 설치 참고: [docs/UBUNTU_SETUP.md](docs/UBUNTU_SETUP.md)
 
 ## 컨테이너 실행
@@ -58,4 +59,5 @@ Stage 0~2에서는 `backend/`의 Django 단일 프로세스와 k6만 사용한�
 | Stage 1: 단일 프로세스 매칭 엔진 | 완료 |
 | Stage 1.5: 거래 참여자 시뮬레이션 | 완료 (in-process 및 외부 HTTP NoiseTrader) |
 | Stage 2: k6 부하 테스트·기본 rate limit | 진행 중 (steady 기준 측정 완료, rate limit 예정) |
+| Stage 2.5: PostgreSQL·KRX KOSPI 참조 데이터 | 완료 (2026-07-27 상위 100개 적재 검증) |
 | Stage 3+: 관측성·queue·영속화·K8s | 측정 결과에 따라 순차 도입 |

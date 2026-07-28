@@ -30,7 +30,7 @@ RUNNER_STATUS_LOG_INTERVAL_TICKS=60
 make demo-down
 ```
 
-이는 컨테이너와 네트워크만 제거하고 `backend-data` SQLite volume은 유지한다. backend를 재시작하면 메모리 호가창은 비워지지만 트레이더 프로필은 남는다. volume까지 삭제하는 명령은 의도적으로 일반 runbook에 포함하지 않는다.
+이는 컨테이너와 네트워크만 제거하고 `postgres-data` volume은 유지한다. backend를 재시작하면 메모리 호가창은 비워지지만 트레이더 프로필과 KRX 참조 데이터는 남는다. volume까지 삭제하는 명령은 의도적으로 일반 runbook에 포함하지 않는다.
 
 ## Kubernetes로 확장할 때의 계약
 

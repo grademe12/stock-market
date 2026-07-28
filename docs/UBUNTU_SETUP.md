@@ -37,7 +37,7 @@ curl http://127.0.0.1:8000/api/v1/health/
 ```
 
 - 가상환경은 `backend/.venv/`에 생성되며 Git으로 관리하지 않는다.
-- 초기 데이터베이스는 Django 기본 SQLite(`backend/db.sqlite3`)다.
+- 로컬 단위 테스트는 Django 기본 SQLite를 사용하고 Compose backend는 PostgreSQL을 사용한다.
 - `DJANGO_SECRET_KEY`와 `DJANGO_DEBUG`는 로컬 환경에서만 기본값을 사용한다. 배포 설정은 Stage 6에서 별도로 다룬다.
 
 ---
@@ -52,7 +52,7 @@ curl http://127.0.0.1:8000/api/v1/health/
 | Docker / Docker Compose | Stage 3 | 관측성 스택의 반복 실행 |
 | Prometheus / Grafana | Stage 3 | 애플리케이션 지표 관측 |
 | Redpanda | Stage 4 | 비동기 주문 처리와 queue lag |
-| PostgreSQL | Stage 5 | 주문·체결 이력 영속화 |
+| PostgreSQL | Stage 2.5 | KRX 참조 데이터와 설정 영속화 |
 | kind / kubectl / Helm / KEDA | Stage 6 | Kubernetes와 autoscaling 실험 |
 
 ---

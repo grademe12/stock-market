@@ -30,8 +30,9 @@ TRADER_SEED ?= 42
 ORDER_RATE ?= 10
 TEST_DURATION ?= 30s
 LOADTEST_ARTIFACTS_DIR ?= .artifacts/loadtest
+TRADE_DATE ?=
 
-.PHONY: backend-setup backend-migrate backend-test backend-run participant-runner-test container-build container-backend-up container-down demo-up demo-seed demo-runner-up demo-logs demo-down load-backend-up load-backend-stats load-steady test run
+.PHONY: backend-setup backend-migrate backend-test backend-run participant-runner-test db-up db-status db-migrate import-krx-top100 container-build container-backend-up container-down demo-up demo-seed demo-runner-up demo-logs demo-down load-backend-up load-backend-stats load-steady test run
 backend-setup: ## Create backend virtualenv and install dependencies
 	python3 -m venv $(BACKEND_DIR)/.venv
 	$(BACKEND_PYTHON) -m pip install --upgrade pip
@@ -49,13 +50,25 @@ backend-run: ## Start Django development server
 participant-runner-test: ## Run external participant runner tests
 	cd participant-runner && PYTHONPATH=../backend python3 -m unittest discover
 
+db-up: ## Start the PostgreSQL container
+	docker compose up -d postgres
+
+db-status: ## Show PostgreSQL container status
+	docker compose ps postgres
+
+db-migrate: ## Apply Django migrations to PostgreSQL
+	docker compose run --rm --entrypoint python backend manage.py migrate
+
+import-krx-top100: ## Import the latest confirmed KOSPI top 100 by trading value
+	docker compose run --rm backend python manage.py import_krx_top100 $(if $(TRADE_DATE),--trade-date $(TRADE_DATE),)
+
 container-build: ## Build backend and participant-runner container images
 	docker compose build
 
 container-backend-up: ## Start only the packaged backend container
 	docker compose up --build backend
 
-container-down: ## Stop and remove project containers (keeps SQLite volume)
+container-down: ## Stop and remove project containers (keeps PostgreSQL volume)
 	docker compose down
 
 demo-up: ## Start the packaged backend for the reproducible demo
@@ -70,7 +83,7 @@ demo-runner-up: ## Start the external participant runner with the local .env set
 demo-logs: ## Follow backend and runner logs for the demo
 	docker compose --profile runner logs -f backend participant-runner
 
-demo-down: ## Stop the reproducible demo containers (keeps SQLite volume)
+demo-down: ## Stop the reproducible demo containers (keeps PostgreSQL volume)
 	docker compose --profile runner down
 
 load-backend-up: ## Start backend with execution logs disabled for a load test

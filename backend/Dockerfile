@@ -3,14 +3,13 @@ FROM python:3.12-slim
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    DJANGO_DB_PATH=/app/data/db.sqlite3
+    PYTHONUNBUFFERED=1
 
 COPY backend/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY backend /app
-RUN chmod +x /app/docker-entrypoint.sh && mkdir -p /app/data
+RUN chmod +x /app/docker-entrypoint.sh
 
 EXPOSE 8000
 
