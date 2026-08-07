@@ -6,12 +6,6 @@ dist/
 *.so
 *.dylib
 
-# Go
-/vendor/
-*.test
-*.out
-coverage.out
-
 # Python
 __pycache__/
 *.py[cod]
@@ -19,11 +13,14 @@ __pycache__/
 venv/
 *.egg-info/
 .pytest_cache/
+*.sqlite3
 
 # Environment
 .env
 .env.*
 !.env.example
+participant-runner/.env
+/db/postgres.env
 
 # IDE
 .idea/
@@ -48,3 +45,4 @@ charts/*/charts/
 # Logs & temp
 *.log
 tmp/
+.artifacts/

@@ -19,7 +19,97 @@ help: ## Show available targets
 	@grep -E '^[a-zA-Z0-9_.-]+:.*##' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*## "}; {printf "  %-22s %s\n", $$1, $$2}'
 	@echo ""
-	@echo "Quick start: make kind-up && make cluster-info"
+	@echo "Quick start: make backend-setup && make backend-run"
+
+# --- Django backend (Stage 0) ---
+
+BACKEND_DIR ?= backend
+BACKEND_PYTHON ?= $(BACKEND_DIR)/.venv/bin/python
+TRADER_COUNT ?= 100
+TRADER_SEED ?= 42
+ORDER_RATE ?= 10
+TEST_DURATION ?= 30s
+LOADTEST_ARTIFACTS_DIR ?= .artifacts/loadtest
+TRADE_DATE ?=
+
+.PHONY: backend-setup backend-migrate backend-test backend-run participant-runner-test db-up db-status db-migrate import-krx-top100 container-build container-backend-up container-down demo-up demo-seed demo-runner-up demo-logs demo-down load-backend-up load-backend-stats load-steady test run
+backend-setup: ## Create backend virtualenv and install dependencies
+	python3 -m venv $(BACKEND_DIR)/.venv
+	$(BACKEND_PYTHON) -m pip install --upgrade pip
+	$(BACKEND_PYTHON) -m pip install -r $(BACKEND_DIR)/requirements.txt
+
+backend-migrate: ## Apply local Django SQLite migrations
+	cd $(BACKEND_DIR) && .venv/bin/python manage.py migrate
+
+backend-test: ## Run Django backend tests
+	cd $(BACKEND_DIR) && .venv/bin/python manage.py test
+
+backend-run: ## Start Django development server
+	cd $(BACKEND_DIR) && .venv/bin/python manage.py runserver
+
+participant-runner-test: ## Run external participant runner tests
+	cd participant-runner && PYTHONPATH=../backend python3 -m unittest discover
+
+db-up: ## Start the PostgreSQL container
+	docker compose up -d postgres
+
+db-status: ## Show PostgreSQL container status
+	docker compose ps postgres
+
+db-migrate: ## Apply Django migrations to PostgreSQL
+	docker compose run --rm --entrypoint python backend manage.py migrate
+
+import-krx-top100: ## Import the latest confirmed KOSPI top 100 by trading value
+	docker compose run --rm backend python manage.py import_krx_top100 $(if $(TRADE_DATE),--trade-date $(TRADE_DATE),)
+
+container-build: ## Build backend and participant-runner container images
+	docker compose build
+
+container-backend-up: ## Start only the packaged backend container
+	docker compose up --build backend
+
+container-down: ## Stop and remove project containers (keeps PostgreSQL volume)
+	docker compose down
+
+demo-up: ## Start the packaged backend for the reproducible demo
+	docker compose up --build -d backend
+
+demo-seed: ## Create deterministic demo trader profiles in the running backend
+	docker compose exec -T backend python manage.py seed_traders --count $(TRADER_COUNT) --seed $(TRADER_SEED)
+
+demo-runner-up: ## Start the external participant runner with the local .env settings
+	docker compose --profile runner up --build -d participant-runner
+
+demo-logs: ## Follow backend and runner logs for the demo
+	docker compose --profile runner logs -f backend participant-runner
+
+demo-down: ## Stop the reproducible demo containers (keeps PostgreSQL volume)
+	docker compose --profile runner down
+
+load-backend-up: ## Start backend with execution logs disabled for a load test
+	TRADE_EXECUTION_LOG_ENABLED=0 docker compose up --build -d backend
+
+load-backend-stats: ## Print one backend CPU and memory snapshot during a load test
+	@backend_id=$$(docker compose ps -q backend); \
+	test -n "$$backend_id" || { echo "backend is not running; run make load-backend-up first"; exit 1; }; \
+	docker stats --no-stream --format 'cpu={{.CPUPerc}} memory={{.MemUsage}}' "$$backend_id"
+
+load-steady: ## Run the steady order-rate k6 scenario and save its JSON summary
+	@mkdir -p $(LOADTEST_ARTIFACTS_DIR)
+	@set -eu; \
+	backend_id=$$(docker compose ps -q backend); \
+	test -n "$$backend_id" || { echo "backend is not running; run make load-backend-up first"; exit 1; }; \
+	host_user="$$(id -u):$$(id -g)"; \
+	result_file=/results/steady-$(ORDER_RATE)ops-$(TEST_DURATION)-summary.json; \
+	TRADE_EXECUTION_LOG_ENABLED=0 docker compose --profile loadtest run --rm --no-deps \
+		--user "$$host_user" \
+		-e ORDER_RATE=$(ORDER_RATE) \
+		-e TEST_DURATION=$(TEST_DURATION) \
+		k6 run --quiet --summary-export "$$result_file" /scripts/scenarios/steady.js
+
+test: backend-test ## Alias for backend-test
+
+run: backend-run ## Alias for backend-run
 
 # --- kind cluster (PR-0.1) ---
 

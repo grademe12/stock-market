@@ -1,0 +1,14 @@
+.git/
+.venv/
+backend/.venv/
+**/__pycache__/
+*.py[cod]
+*.sqlite3
+.env
+.env.*
+!*.env.example
+/db/.env
+/db/postgres.env
+bin/
+dist/
+tmp/
