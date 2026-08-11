@@ -1,0 +1,8 @@
+project_id         = "stock-market-505109"
+runner_source_cidr = "203.0.113.10/32"
+
+# Optional overrides
+# region          = "asia-northeast3"
+# zone            = "asia-northeast3-a"
+# vm_machine_type = "e2-medium"
+# cloud_sql_tier  = "db-f1-micro"
