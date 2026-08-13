@@ -1,6 +1,19 @@
 # Participant runner
 
-`participant-runner`는 백엔드와 별도 프로세스(또는 컨테이너)에서 실행되는 시장참여자 클라이언트다. 활성 `TraderProfile`을 백엔드 API에서 읽고, HTTP 주문·취소 요청으로만 거래소에 접근한다. 따라서 Django 내부의 in-process 봇과 달리 HTTP/DRF/매칭 경로 전체에 부하를 만든다.
+`participant-runner`는 백엔드와 별도 프로세스(또는 컨테이너)에서 실행되는 유일한 시장참여자 실행 경로다. 활성 `TraderProfile`을 백엔드 API에서 읽고, HTTP 호가 조회·주문·취소 요청으로만 거래소에 접근한다. 모든 전략이 HTTP/DRF/매칭 경로 전체에 실제 부하를 만든다.
+
+## Strategies
+
+runner는 매 tick마다 종목별 호가를 한 번 조회하고 아래 전략에 같은 스냅샷을 전달한다.
+
+| Strategy | 주문 규칙 |
+|---|---|
+| `noise` | seed 기반으로 매수/매도, 기준가 주변 오프셋, 수량을 무작위 선택 |
+| `momentum` | 직전 midpoint 대비 상승 시 best ask 매수, 하락 시 best bid 매도, 최초·보합 tick은 대기 |
+| `mean_reversion` | midpoint가 기준가보다 한 호가 이상 낮으면 best ask 매수, 높으면 best bid 매도 |
+| `liquidity_provider` | midpoint 한 호가 아래 bid와 한 호가 위 ask를 같은 tick에 제출 |
+
+midpoint는 양쪽 호가가 있으면 두 최우선 호가의 평균, 한쪽만 있으면 해당 가격, 빈 호가창이면 프로필의 `reference_price`다. LP의 중심가는 `max_offset_steps × price_step` 범위 안에서 기준가 주변으로 제한한다. 모든 미체결 주문에는 프로필의 `order_ttl_ticks`가 적용된다.
 
 ## Configuration layers
 

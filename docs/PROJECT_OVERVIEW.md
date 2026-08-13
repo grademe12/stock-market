@@ -25,13 +25,15 @@
 
 ```mermaid
 sequenceDiagram
-    participant T as NoiseTrader
+    participant T as TradingParticipant
     participant R as participant-runner
     participant A as Django 주문 API
     participant B as in-memory order book
 
-    R->>T: tick마다 주문 의도 확인
-    T-->>R: 매수/매도 지정가 주문
+    R->>A: GET /api/v1/books/005930/
+    A-->>R: best bid/ask를 포함한 호가 스냅샷
+    R->>T: tick과 호가 스냅샷 전달
+    T-->>R: 0~2개의 지정가 주문 의도
     R->>A: POST /api/v1/orders/
     A->>B: 주문 제출
     B->>B: 최우선 반대 호가와 가격·시간 우선 매칭
@@ -52,19 +54,22 @@ sequenceDiagram
 
 예를 들어 70,000원 매도 5주가 호가창에 있을 때, 71,000원 매수 3주가 들어오면 70,000원에 3주가 체결되고 매도 주문은 2주가 남는다. 이는 들어온 주문의 가격이 아니라 기존 매도 호가인 70,000원을 체결 가격으로 사용한 결과다.
 
-`participant-runner`는 backend 밖에서 실행되며, 시작 시 활성화된 트레이더 프로필을 조회한다. 각 `NoiseTrader`는 자신의 seed를 이용해 재현 가능하게 다음 값을 생성한다.
+모든 트레이더는 `participant-runner`에서만 실행된다. Django 내부 background 실행 경로는 사용하지 않으며, runner는 시작 시 활성화된 트레이더 프로필을 조회한다. 매 tick마다 종목별 호가 스냅샷을 한 번 읽고 전략에 전달한다.
 
-- 매수 또는 매도 방향
-- 기준 가격을 중심으로 `max_offset_steps × price_step` 범위 안의 지정가
-- 설정된 최소·최대 범위 안의 수량
+현재 구현된 전략은 다음 네 가지다.
+
+- `NoiseTrader`: seed 기반으로 방향·기준가 주변 가격·수량을 무작위 생성한다.
+- `MomentumTrader`: 직전 midpoint보다 상승하면 최우선 매도호가에 매수하고, 하락하면 최우선 매수호가에 매도한다.
+- `MeanReversionTrader`: midpoint가 기준가에서 한 호가 이상 낮으면 매수하고, 한 호가 이상 높으면 매도한다.
+- `LiquidityProvider`: midpoint를 중심으로 한 호가 아래 매수와 한 호가 위 매도를 함께 낸다.
 
 각 트레이더는 `interval_ticks` 주기마다 한 번만 주문 의도를 만든다. runner는 이 의도를 실제 HTTP 주문 API로 전송하고, 응답의 잔량이 0보다 큰 주문 ID만 자체 메모리에 추적한다. 추적된 주문은 `order_ttl_ticks`가 지나면 취소 API로 제거한다. 그 사이 다른 주문과 체결되어 이미 사라진 주문은 `ALREADY_CLOSED`로 처리하며, 정상적인 경쟁 상황으로 집계한다.
 
-NoiseTrader는 호가창 상태를 읽거나 가격을 예측하지 않는다. 따라서 이는 시장조성자 전략이 아니라, 서로 독립적인 참여자가 기준 가격 주변에 임의의 지정가 주문을 내는 단순한 거래 흐름이다. 잔고·보유 수량·증거금 검증도 아직 없으므로, 현재 체결은 주문 우선순위와 수량 변화만 모사한다.
+여기서 midpoint는 `(best bid + best ask) / 2`의 정수값이며 한쪽 호가만 있으면 그 가격, 호가가 없으면 프로필 기준가를 사용한다. 현재 API에는 체결가 이력이 없으므로 Momentum은 체결가가 아니라 이 midpoint의 tick 간 변화를 사용한다. 잔고·보유 수량·증거금 검증도 아직 없으므로, 현재 체결은 주문 우선순위와 수량 변화만 모사한다.
 
 ### 가상 시장참여자
 
-- `NoiseTrader` 전략을 사용하는 트레이더 프로필 관리 API
+- 네 가지 전략을 사용하는 트레이더 프로필 관리 API
 - 주문 가격 범위, 수량, 제출 주기, 주문 유효 tick 등 트레이더별 설정
 - 결정론적으로 트레이더 프로필을 생성·갱신하는 `seed_traders` 명령
 - backend와 분리된 `participant-runner` 프로세스/컨테이너

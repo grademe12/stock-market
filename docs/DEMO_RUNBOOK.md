@@ -12,9 +12,17 @@ make demo-logs
 ```
 
 - `demo-up`: backend를 Gunicorn worker 1개로 시작한다.
-- `demo-seed`: `random-noise-user-*` 프로필만 생성 또는 갱신한다. 같은 count·seed는 같은 설정을 만든다.
+- `demo-seed`: `TRADER_STRATEGY`(기본값 `noise`)로 선택한 전략의 프로필만 생성 또는 갱신한다. 같은 count·seed는 같은 설정을 만든다.
 - `demo-runner-up`: backend와 별도 컨테이너에서 HTTP 주문·취소를 전송한다.
 - `demo-logs`: `event=trade_executed`와 `event=runner_status`를 함께 관찰한다.
+
+기본 `demo-seed`는 Noise 프로필을 만든다. 다른 전략은 같은 명령에 전략을 지정해 추가한다.
+
+```bash
+make demo-seed TRADER_STRATEGY=momentum TRADER_COUNT=20 TRADER_SEED=42
+make demo-seed TRADER_STRATEGY=mean_reversion TRADER_COUNT=20 TRADER_SEED=42
+make demo-seed TRADER_STRATEGY=liquidity_provider TRADER_COUNT=5 TRADER_SEED=42
+```
 
 개인 runner 범위는 Git 제외 파일 `participant-runner/.env`에서 조정한다.
 

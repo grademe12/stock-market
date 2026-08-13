@@ -3,19 +3,18 @@ import logging
 from threading import Event
 from typing import Protocol
 
-from exchange.participants.types import OrderIntent
+from exchange.orderbook import BookSnapshot
+from exchange.participants.types import OrderIntent, TradingParticipant
 
 from participant_runner.client import BackendApiError, CancellationResult, SubmittedOrder
 
 
 class BackendClient(Protocol):
+    def fetch_book(self, symbol: str) -> BookSnapshot: ...
+
     def submit_order(self, intent: OrderIntent) -> SubmittedOrder: ...
 
     def cancel_order(self, order_id: str) -> CancellationResult: ...
-
-
-class Participant(Protocol):
-    def next_intent(self, tick: int) -> OrderIntent | None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,7 +37,11 @@ class RunnerStatus:
 class ParticipantRunner:
     """Runs participant decisions outside the backend process through HTTP."""
 
-    def __init__(self, client: BackendClient, participants: tuple[Participant, ...]) -> None:
+    def __init__(
+        self,
+        client: BackendClient,
+        participants: tuple[TradingParticipant, ...],
+    ) -> None:
         self._client = client
         self._participants = participants
         self._tick = 0
@@ -52,26 +55,41 @@ class ParticipantRunner:
         self._tick += 1
         self._expire_orders()
 
+        snapshots = self._fetch_snapshots()
         for participant in self._participants:
-            intent = participant.next_intent(self._tick)
-            if intent is None:
+            snapshot = snapshots.get(participant.symbol)
+            if snapshot is None:
                 continue
-            try:
-                submitted_order = self._client.submit_order(intent)
-            except BackendApiError as exc:
-                self._request_failures += 1
-                logging.warning("order submission failed: %s", exc)
-                continue
-
-            self._orders_submitted += 1
-            if submitted_order.remaining_quantity:
-                self._outstanding_orders[submitted_order.order_id] = TrackedOrder(
-                    order_id=submitted_order.order_id,
-                    submitted_tick=self._tick,
-                    expires_after_ticks=intent.order_ttl_ticks or 1,
-                )
+            for intent in participant.next_intents(self._tick, snapshot):
+                self._submit(intent)
 
         return self.status()
+
+    def _fetch_snapshots(self) -> dict[str, BookSnapshot]:
+        snapshots: dict[str, BookSnapshot] = {}
+        for symbol in dict.fromkeys(participant.symbol for participant in self._participants):
+            try:
+                snapshots[symbol] = self._client.fetch_book(symbol)
+            except BackendApiError as exc:
+                self._request_failures += 1
+                logging.warning("book request failed for %s: %s", symbol, exc)
+        return snapshots
+
+    def _submit(self, intent: OrderIntent) -> None:
+        try:
+            submitted_order = self._client.submit_order(intent)
+        except BackendApiError as exc:
+            self._request_failures += 1
+            logging.warning("order submission failed: %s", exc)
+            return
+
+        self._orders_submitted += 1
+        if submitted_order.remaining_quantity:
+            self._outstanding_orders[submitted_order.order_id] = TrackedOrder(
+                order_id=submitted_order.order_id,
+                submitted_tick=self._tick,
+                expires_after_ticks=intent.order_ttl_ticks or 1,
+            )
 
     def cancel_all_open_orders(self) -> RunnerStatus:
         for order_id in tuple(self._outstanding_orders):

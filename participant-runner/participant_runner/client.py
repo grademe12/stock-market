@@ -4,6 +4,7 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from exchange.orderbook import BookLevel, BookSnapshot
 from exchange.participants.types import OrderIntent
 
 
@@ -36,6 +37,18 @@ class BackendApiClient:
         if not isinstance(payload, list):
             raise BackendApiError(None, "trader profile response must be a list")
         return payload
+
+    def fetch_book(self, symbol: str) -> BookSnapshot:
+        payload = self._request("GET", f"/api/v1/books/{symbol}/")
+        try:
+            payload_symbol = str(payload["symbol"])
+            bids = self._book_levels(payload["bids"])
+            asks = self._book_levels(payload["asks"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise BackendApiError(None, "book response has an invalid shape") from exc
+        if payload_symbol != symbol:
+            raise BackendApiError(None, "book response symbol does not match request")
+        return BookSnapshot(symbol=payload_symbol, bids=bids, asks=asks)
 
     def submit_order(self, intent: OrderIntent) -> SubmittedOrder:
         payload = self._request(
@@ -88,3 +101,16 @@ class BackendApiClient:
             raise BackendApiError(exc.code, detail) from exc
         except (URLError, TimeoutError, json.JSONDecodeError) as exc:
             raise BackendApiError(None, str(exc)) from exc
+
+    @staticmethod
+    def _book_levels(payload: Any) -> tuple[BookLevel, ...]:
+        if not isinstance(payload, list):
+            raise ValueError("book levels must be a list")
+        levels = []
+        for level in payload:
+            price = int(level["price"])
+            quantity = int(level["qty"])
+            if price < 1 or quantity < 1:
+                raise ValueError("book level values must be positive")
+            levels.append(BookLevel(price=price, quantity=quantity))
+        return tuple(levels)

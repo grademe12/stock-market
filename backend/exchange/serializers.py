@@ -2,7 +2,6 @@ from rest_framework import serializers
 
 from exchange.models import TraderProfile
 from exchange.orderbook import BookSnapshot, MatchResult, Order, OrderSide, Trade
-from exchange.participants import SimulationConfig
 
 SIMULATION_SYMBOL = "005930"
 
@@ -22,51 +21,6 @@ class OrderRequestSerializer(serializers.Serializer):
             price=self.validated_data["price"],
             quantity=self.validated_data["qty"],
         )
-
-
-class ParticipantSimulationConfigSerializer(serializers.Serializer):
-    strategy = serializers.ChoiceField(choices=["noise"], default="noise")
-    participants = serializers.IntegerField(min_value=1, max_value=100, default=20)
-    reference_price = serializers.IntegerField(min_value=1, default=70_000)
-    price_step = serializers.IntegerField(min_value=1, default=100)
-    max_offset_steps = serializers.IntegerField(min_value=0, max_value=100, default=5)
-    quantity_min = serializers.IntegerField(min_value=1, default=1)
-    quantity_max = serializers.IntegerField(min_value=1, default=10)
-    order_ttl_ticks = serializers.IntegerField(min_value=1, max_value=1_000, default=5)
-    interval_ms = serializers.IntegerField(min_value=10, max_value=60_000, default=1_000)
-    seed = serializers.IntegerField(default=42)
-    trader_ids = serializers.ListField(
-        child=serializers.UUIDField(),
-        required=False,
-        allow_empty=False,
-    )
-
-    def validate(self, attrs):
-        if attrs["quantity_max"] < attrs["quantity_min"]:
-            raise serializers.ValidationError("quantity_max must be at least quantity_min")
-        return attrs
-
-    def validate_trader_ids(self, value):
-        if len(set(value)) != len(value):
-            raise serializers.ValidationError("trader_ids must not contain duplicates")
-        return value
-
-    def create_config(self) -> SimulationConfig:
-        return SimulationConfig(
-            participants=self.validated_data["participants"],
-            reference_price=self.validated_data["reference_price"],
-            price_step=self.validated_data["price_step"],
-            max_offset_steps=self.validated_data["max_offset_steps"],
-            quantity_min=self.validated_data["quantity_min"],
-            quantity_max=self.validated_data["quantity_max"],
-            order_ttl_ticks=self.validated_data["order_ttl_ticks"],
-            interval_ms=self.validated_data["interval_ms"],
-            seed=self.validated_data["seed"],
-        )
-
-    @property
-    def selected_trader_ids(self) -> list:
-        return self.validated_data.get("trader_ids", [])
 
 
 class TraderProfileSerializer(serializers.ModelSerializer):

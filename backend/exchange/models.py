@@ -5,8 +5,12 @@ from django.db import models
 
 class TraderProfile(models.Model):
     """Persisted configuration for one simulated trading participant."""
+
     class Strategy(models.TextChoices):
         NOISE = "noise", "Noise"
+        MOMENTUM = "momentum", "Momentum"
+        MEAN_REVERSION = "mean_reversion", "Mean Reversion"
+        LIQUIDITY_PROVIDER = "liquidity_provider", "Liquidity Provider"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100, unique=True)

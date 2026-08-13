@@ -1,4 +1,3 @@
-from dataclasses import asdict
 import logging
 from uuid import UUID
 
@@ -10,30 +9,17 @@ from rest_framework.exceptions import NotFound, PermissionDenied, ValidationErro
 from rest_framework.response import Response
 
 from exchange.orderbook import OrderBook, OrderNotFoundError
-from exchange.participants import ParticipantSimulationRuntime, SimulationAlreadyRunningError
-from exchange.participants.adapters import InMemoryOrderBookAdapter
 from exchange.models import TraderProfile
 from exchange.serializers import (
     OrderRequestSerializer,
-    ParticipantSimulationConfigSerializer,
     TraderProfileSerializer,
     match_result_payload,
     snapshot_payload,
 )
-from exchange.trader_profiles import profiles_to_participants
 
 SIMULATION_SYMBOL = "005930"
 execution_logger = logging.getLogger("exchange.execution")
 order_book = OrderBook(symbol=SIMULATION_SYMBOL)
-
-
-def build_participant_runtime() -> ParticipantSimulationRuntime:
-    return ParticipantSimulationRuntime(
-        InMemoryOrderBookAdapter(lambda: order_book)
-    )
-
-
-participant_runtime = build_participant_runtime()
 
 
 @api_view(["GET"])
@@ -106,27 +92,9 @@ def _log_executed_trades(result) -> None:
         )
 
 
-def _participant_config(request):
-    serializer = ParticipantSimulationConfigSerializer(data=request.data)
-    serializer.is_valid(raise_exception=True)
-
-    has_profiles = TraderProfile.objects.exists()
-    profiles = TraderProfile.objects.filter(enabled=True)
-    selected_trader_ids = serializer.selected_trader_ids
-    if selected_trader_ids:
-        profiles = profiles.filter(id__in=selected_trader_ids)
-        if profiles.count() != len(selected_trader_ids):
-            raise ValidationError(
-                {"trader_ids": "each selected trader must exist and be enabled"}
-            )
-
-    participants = profiles_to_participants(profiles) if has_profiles or selected_trader_ids else None
-    return serializer.create_config(), participants
-
-
 def _require_development_mode() -> None:
     if not settings.DEBUG:
-        raise PermissionDenied("participant simulation controls are only available in DEBUG mode")
+        raise PermissionDenied("trader profile changes are only available in DEBUG mode")
 
 
 @api_view(["GET", "POST"])
@@ -157,38 +125,3 @@ def trader_profile_detail(request, trader_id: UUID):
 
     profile.delete()
     return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-@api_view(["POST"])
-def start_participant_simulation(request):
-    _require_development_mode()
-
-    try:
-        config, participants = _participant_config(request)
-        participant_runtime.start(config, participants)
-    except SimulationAlreadyRunningError as exc:
-        return Response({"detail": str(exc)}, status=status.HTTP_409_CONFLICT)
-
-    return Response(participant_runtime.status_payload(), status=status.HTTP_201_CREATED)
-
-
-@api_view(["POST"])
-def tick_participant_simulation(request):
-    _require_development_mode()
-
-    try:
-        config, participants = _participant_config(request)
-        simulation_status = participant_runtime.tick_once(config, participants)
-    except SimulationAlreadyRunningError as exc:
-        return Response({"detail": str(exc)}, status=status.HTTP_409_CONFLICT)
-
-    return Response({"simulation": asdict(simulation_status)})
-
-
-@api_view(["GET", "DELETE"])
-def participant_simulation(request):
-    if request.method == "DELETE":
-        _require_development_mode()
-        participant_runtime.stop()
-
-    return Response(participant_runtime.status_payload())

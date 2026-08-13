@@ -40,13 +40,21 @@ Compose 설정은 backend 컨테이너를 CPU 1코어(`cpus: "1.0"`)와 메모�
 docker compose --profile runner up --build
 ```
 
-재현 가능한 데모는 아래 명령으로 실행한다. `seed_traders`는 `random-noise-user-001`부터 결정론적으로 upsert하며, 직접 만든 다른 트레이더는 변경하지 않는다.
+재현 가능한 데모는 아래 명령으로 실행한다. `seed_traders`는 선택한 전략의 전용 ID를 사용해 결정론적으로 upsert하며, 직접 만든 다른 트레이더는 변경하지 않는다.
 
 ```bash
 make demo-up
 make demo-seed TRADER_COUNT=100 TRADER_SEED=42
 make demo-runner-up
 make demo-logs
+```
+
+다른 전략 프로필은 `TRADER_STRATEGY`으로 결정론적으로 생성한다.
+
+```bash
+make demo-seed TRADER_STRATEGY=momentum TRADER_COUNT=20
+make demo-seed TRADER_STRATEGY=mean_reversion TRADER_COUNT=20
+make demo-seed TRADER_STRATEGY=liquidity_provider TRADER_COUNT=5
 ```
 
 정리와 상세 실행 순서는 [데모 runbook](../docs/DEMO_RUNBOOK.md)을 참고한다.
@@ -63,19 +71,16 @@ make demo-logs
 | `GET /api/v1/health/` | 서버 상태 확인 |
 | `GET` / `POST /api/v1/traders/` | 트레이더 환경설정 목록 조회 / 생성 |
 | `GET` / `PATCH` / `DELETE /api/v1/traders/{trader_id}/` | 개별 트레이더 환경설정 조회 / 수정 / 삭제 |
-| `POST /api/v1/simulations/participants/tick/` | NoiseTrader 시뮬레이션 한 tick 실행 |
-| `POST /api/v1/simulations/participants/start/` | NoiseTrader background 실행 시작 |
-| `GET` / `DELETE /api/v1/simulations/participants/` | 참여자 시뮬레이션 상태 조회 / 중지 |
 
 주문 API의 입력은 `user_id`, `symbol`, `side` (`BUY` 또는 `SELL`), `price`, `qty`다. 가격과 수량은 양의 정수만 허용한다.
 
 주문 취소는 idempotent하다. 열린 주문은 `status: CANCELED`로 취소되고, 이미 체결·취소되어 호가창에 없는 주문은 `status: ALREADY_CLOSED`로 정상 응답한다. 이는 TTL 기반 runner의 지연 취소를 오류와 구분하기 위한 현재 단계의 계약이다.
 
-트레이더 설정은 PostgreSQL의 `TraderProfile`로 보관하며, 프론트엔드가 위 API를 통해 그대로 편집할 수 있다. 설정에는 이름·가상 사용자 ID·활성화 여부·종목·기준가·가격 단위·가격 오프셋·수량 범위·주문 TTL·개별 실행 주기·seed가 포함된다. 현재 지원 전략은 `noise`, 종목은 `005930` 하나다.
+트레이더 설정은 PostgreSQL의 `TraderProfile`로 보관하며, 프론트엔드가 위 API를 통해 그대로 편집할 수 있다. 설정에는 이름·가상 사용자 ID·활성화 여부·종목·기준가·가격 단위·가격 오프셋·수량 범위·주문 TTL·개별 실행 주기·seed가 포함된다. 현재 지원 전략은 `noise`, `momentum`, `mean_reversion`, `liquidity_provider`이고 종목은 `005930` 하나다.
 
-활성화된 설정이 하나 이상 있으면 시뮬레이션은 해당 트레이더들만 실행한다. 설정이 아직 없을 때만 기존 요청의 `participants` 값으로 임시 NoiseTrader를 생성한다. `trader_ids` 배열을 start/tick 요청에 넣으면 실행할 활성 트레이더를 명시적으로 고를 수 있다. 설정 변경은 다음 시뮬레이션 시작에 반영한다.
+모든 트레이더는 backend 밖의 `participant-runner`에서만 실행한다. backend 내부 background thread와 start/stop/manual-tick API는 더 이상 제공하지 않는다. runner는 시작할 때 활성 프로필을 조회하며, `TRADER_IDS` 또는 `MAX_TRADERS`로 실행 대상을 제한한다. 설정 변경은 다음 runner 재시작부터 반영된다.
 
-트레이더 설정 변경과 참여자 시뮬레이션 제어는 `DEBUG`가 활성화된 로컬 개발 환경에서만 허용한다. `NoiseTrader`는 재현 가능한 seed를 기반으로 여러 가상 사용자의 매수·매도 지정가 주문을 생성한다. 시뮬레이션을 중지하면 남은 봇 주문은 취소된다.
+트레이더 설정 변경은 `DEBUG`가 활성화된 로컬 개발 환경에서만 허용한다. runner를 정상 종료하면 runner가 추적 중인 미체결 주문을 취소한다.
 
 Compose 환경은 KRX 참조 데이터와 트레이더 설정을 PostgreSQL에 저장한다. 주문·체결과 호가창은 아직 메모리에만 있으며 backend 재시작 시 초기화된다. 로컬 `make backend-test`는 빠른 단위 테스트를 위해 SQLite를 사용한다.
 

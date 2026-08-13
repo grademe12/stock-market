@@ -1,8 +1,8 @@
 from collections.abc import Iterable
 from typing import Any
 
-from exchange.participants.traders import NoiseTrader
-from exchange.participants.types import TraderSettings
+from exchange.participants.traders import build_trader
+from exchange.participants.types import TraderSettings, TradingParticipant
 
 
 class InvalidTraderProfileError(ValueError):
@@ -13,7 +13,7 @@ def build_participants(
     profiles: Iterable[dict[str, Any]],
     trader_ids: tuple[str, ...] = (),
     max_traders: int | None = None,
-) -> tuple[NoiseTrader, ...]:
+) -> tuple[TradingParticipant, ...]:
     selected_ids = set(trader_ids)
     selected_profiles = [
         profile
@@ -31,7 +31,7 @@ def build_participants(
 
     try:
         return tuple(
-            NoiseTrader(
+            build_trader(
                 TraderSettings(
                     user_id=str(profile["user_id"]),
                     symbol=str(profile["symbol"]),

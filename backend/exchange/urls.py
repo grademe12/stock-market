@@ -13,19 +13,4 @@ urlpatterns = [
         views.trader_profile_detail,
         name="trader-profile-detail",
     ),
-    path(
-        "simulations/participants/start/",
-        views.start_participant_simulation,
-        name="participant-simulation-start",
-    ),
-    path(
-        "simulations/participants/tick/",
-        views.tick_participant_simulation,
-        name="participant-simulation-tick",
-    ),
-    path(
-        "simulations/participants/",
-        views.participant_simulation,
-        name="participant-simulation",
-    ),
 ]

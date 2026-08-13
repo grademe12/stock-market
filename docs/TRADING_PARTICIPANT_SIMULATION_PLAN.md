@@ -6,7 +6,7 @@
 
 **관련 문서**: [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) · [KRX_TOP100_REFERENCE_DATA_PLAN.md](./KRX_TOP100_REFERENCE_DATA_PLAN.md)
 
-**현재 상태**: P1 NoiseTrader, TTL 기반 주문 취소, in-process runtime, start/stop/status/manual tick API, 트레이더별 영속 설정 CRUD API와 별도 HTTP participant-runner 구현 완료. Momentum·Mean-Reversion·선택적 LP는 후속 작업이다.
+**현재 상태**: Noise·Momentum·Mean-Reversion·선택적 LP, TTL 기반 주문 취소, 트레이더별 영속 설정 CRUD API와 별도 HTTP participant-runner 구현 완료. 모든 트레이더는 external runner에서만 실행하며 Django 내부 runtime은 사용하지 않는다.
 
 ---
 
@@ -76,47 +76,43 @@ Noise / Momentum / Mean-Reversion 참여자
 
 각 참가자는 위 기본값을 공유하지 않아도 된다. `TraderProfile`은 `name`, `user_id`, `enabled`와 함께 가격·수량·TTL·실행 주기(`interval_ticks`)·seed를 개별적으로 보관한다. 이는 Django 모델과 DRF API에만 의존하며, 봇 도메인 코드는 `TraderSettings`로 변환된 값만 받는다.
 
-참여자는 한 번에 매수 또는 매도 한 방향 주문만 낸다. 따라서 시장에 양방향 유동성이 생기는 것은 여러 참여자의 집합 행동 결과다.
+Noise·Momentum·Mean-Reversion 참여자는 한 tick에 매수 또는 매도 한 방향 주문만 낸다. LP는 예외적으로 양방향 호가를 함께 낸다.
 
-### P2 — Momentum Trader
+### P2 — Momentum Trader (구현 완료)
 
-최근 체결가 또는 최근 주문 흐름이 상승이면 매수 확률을 높이고, 하락이면 매도 확률을 높인다. 가격에 추세가 생길 때 체결률과 호가 잔량이 어떻게 달라지는지 관찰하는 용도다.
+runner가 읽은 현재 midpoint를 직전 실행 tick의 midpoint와 비교한다. 상승하면 best ask 가격으로 매수하고, 하락하면 best bid 가격으로 매도한다. 첫 관측과 보합에서는 주문하지 않는다. 현재 거래 API가 최근 체결가 이력을 제공하지 않으므로 이 단계에서는 호가 midpoint를 추세 신호로 사용한다.
 
-### P3 — Mean-Reversion Trader
+### P3 — Mean-Reversion Trader (구현 완료)
 
-기준가보다 충분히 높은 가격에서는 매도, 낮은 가격에서는 매수 확률을 높인다. Momentum Trader와 함께 사용할 때 상반된 전략이 시장에 미치는 영향을 비교한다.
+midpoint가 프로필의 `reference_price`보다 `price_step` 이상 낮으면 best ask 가격으로 매수하고, 같은 폭 이상 높으면 best bid 가격으로 매도한다. 기준가 주변 한 호가 범위에서는 주문하지 않는다. Momentum Trader와 함께 사용할 때 상반된 전략이 시장에 미치는 영향을 비교한다.
 
-### P4 — Optional Liquidity Provider
+### P4 — Optional Liquidity Provider (구현 완료)
 
-기준가 양쪽에 수동적 양방향 호가를 유지하고, 체결·취소 후 재호가한다. 기본 시나리오의 전제가 아니라 비교 플래그로만 사용한다.
+현재 midpoint의 한 호가 아래에 매수, 한 호가 위에 매도를 같은 tick에 제출한다. 중심가는 프로필 기준가의 `max_offset_steps × price_step` 범위를 벗어나지 않게 제한한다. 주문은 다른 전략과 같은 TTL 규칙으로 취소·재제출되며, 기본 시나리오의 전제가 아니라 비교용 프로필로만 사용한다.
 
 ---
 
 ## 4. 아키텍처 제약과 구성
 
-현재 order book은 Django 서버 프로세스의 메모리에 존재한다. 따라서 별도 `manage.py` 프로세스나 별도 worker에서 `OrderBook`을 직접 호출하면 서로 다른 order book을 보게 된다.
-
-초기 구현은 단일 Django 프로세스 안에서만 동작한다.
+현재 order book은 Django 서버 프로세스의 메모리에 존재한다. 따라서 트레이더는 별도 프로세스에서 `OrderBook`을 직접 호출하지 않고, 모두 HTTP API를 거쳐 backend의 단일 호가창에 접근한다.
 
 ```text
-DRF API / Bot control API
-             │
+participant-runner
+  ├─ GET /traders/로 활성 프로필 로드
+  ├─ tick마다 GET /books/{symbol}/
+  ├─ 전략별 0~2개 주문 의도 생성
+  ├─ POST /orders/
+  └─ TTL 뒤 DELETE /orders/{id}/
+             │ HTTP
              ▼
-     ParticipantOrchestrator
-       ├─ participant registry
-       ├─ deterministic random generator
-       ├─ outstanding-order TTL 관리
-       └─ tick loop (daemon thread)
-             │
-             ▼
-      동일 프로세스의 OrderBook
+      Django의 단일 OrderBook
 ```
 
-`ParticipantOrchestrator.tick()`은 동기 함수로 먼저 구현한다. background thread는 이 함수를 일정 주기로 호출하는 얇은 실행 계층으로만 둔다. 이렇게 하면 테스트에서 시간·thread 의존 없이 tick 단위로 결과를 검증할 수 있다.
+runner는 종목별 호가를 tick당 한 번만 조회한다. 같은 tick에 있는 여러 트레이더는 동일한 스냅샷으로 판단하므로, 앞선 트레이더의 주문 결과는 다음 tick부터 전략 입력에 반영된다. midpoint는 양쪽 호가가 있으면 best bid와 best ask의 정수 평균, 한쪽만 있으면 그 가격, 호가가 없으면 각 프로필의 기준가다.
 
 ### 4.1 외부 participant-runner
 
-백엔드 부하 실습에는 in-process runtime을 사용하지 않는다. 루트의 `participant-runner/`는 별도 프로세스/컨테이너로 동작하며, `GET /traders/`로 활성 프로필을 읽고 `POST /orders/`, `DELETE /orders/{id}/`만 호출한다. 즉 runner는 API 소비자이고, 매칭 상태를 공유하지 않는다.
+루트의 `participant-runner/`는 별도 프로세스/컨테이너로 동작하며, `GET /traders/`로 활성 프로필을 읽고 `GET /books/{symbol}/`, `POST /orders/`, `DELETE /orders/{id}/`만 호출한다. 즉 runner는 API 소비자이고, 매칭 상태를 공유하지 않는다. backend 내부 start/stop/manual-tick API는 제거했다.
 
 ```text
 participant-runner container
@@ -129,45 +125,27 @@ participant-runner container
 
 ## 5. API
 
-제어 API는 로컬 개발·실험 목적이다. 인증·권한은 계좌 기능을 도입할 때 별도 설계한다.
+트레이더 프로필 변경 API는 로컬 개발·실험 목적이다. 인증·권한은 계좌 기능을 도입할 때 별도 설계한다.
 
 | Method | Endpoint | 용도 |
 |---|---|---|
-| `POST` | `/api/v1/simulations/participants/start/` | 시뮬레이션 시작 |
-| `DELETE` | `/api/v1/simulations/participants/` | 실행 중지 |
-| `GET` | `/api/v1/simulations/participants/` | 상태·tick·주문·체결 통계 확인 |
-| `POST` | `/api/v1/simulations/participants/tick/` | 수동으로 한 tick 실행 |
 | `GET` / `POST` | `/api/v1/traders/` | 트레이더 설정 목록 조회 / 생성 |
 | `GET` / `PATCH` / `DELETE` | `/api/v1/traders/{trader_id}/` | 트레이더 설정 조회 / 수정 / 삭제 |
+| `GET` | `/api/v1/books/{symbol}/` | 전략 입력용 호가 스냅샷 조회 |
+| `POST` | `/api/v1/orders/` | runner 주문 제출 |
+| `DELETE` | `/api/v1/orders/{order_id}/` | runner 미체결 주문 취소 |
 
-`POST`, `PATCH`, `DELETE`와 시뮬레이션 제어 API는 현재 인증이 없는 로컬 실험 기능이므로 `DEBUG` 환경에서만 허용한다. 목록·상세 `GET` 응답은 프론트엔드 폼이 그대로 사용할 수 있도록 모든 설정 필드와 생성·수정 시각을 반환한다.
+트레이더 프로필의 `POST`, `PATCH`, `DELETE`는 현재 인증이 없는 로컬 실험 기능이므로 `DEBUG` 환경에서만 허용한다. 목록·상세 `GET` 응답은 runner와 프론트엔드 폼이 그대로 사용할 수 있도록 모든 설정 필드와 생성·수정 시각을 반환한다.
 
-트레이더 설정이 하나 이상 존재하면 `enabled=true`인 트레이더만 실행한다. `start`/`tick` 요청의 선택적 `trader_ids` 배열로 실행 대상을 좁힐 수 있으며, 비활성화됐거나 존재하지 않는 ID는 거절한다. 설정이 전혀 없을 때만 아래의 legacy 요청 값으로 임시 NoiseTrader를 생성한다.
-
-시작 요청 예시:
-
-```json
-{
-  "strategy": "noise",
-  "participants": 20,
-  "reference_price": 70000,
-  "price_step": 100,
-  "max_offset_steps": 5,
-  "quantity_min": 1,
-  "quantity_max": 10,
-  "order_ttl_ticks": 5,
-  "interval_ms": 1000,
-  "seed": 42
-}
-```
+runner는 `enabled=true`인 트레이더만 실행한다. `TRADER_IDS`와 `MAX_TRADERS` 환경 변수로 실행 대상을 좁힐 수 있으며, 설정이 없으면 주문을 생성하지 않는다.
 
 트레이더 생성 요청 예시:
 
 ```json
 {
-  "name": "slow-noise-1",
-  "user_id": "noise-profile-001",
-  "strategy": "noise",
+  "name": "momentum-1",
+  "user_id": "momentum-profile-001",
+  "strategy": "momentum",
   "enabled": true,
   "symbol": "005930",
   "reference_price": 70000,
@@ -188,53 +166,54 @@ participant-runner container
 ### P1.1 — 참여자 도메인 모델
 
 - `TradingParticipant` 프로토콜
-- `NoiseTrader` 주문 생성
+- 네 가지 전략의 0~2개 주문 의도 생성
 - 주문 의도(`OrderIntent`)와 난수 seed 관리
 
-**완료 기준**: 같은 seed와 tick 번호에서 동일한 주문 의도가 생성된다.
+**완료 기준**: 같은 seed·tick·호가 스냅샷에서 동일한 주문 의도가 생성되고, 각 전략의 방향·가격 규칙이 단위 테스트로 검증된다.
 
-### P1.2 — Orchestrator와 주문 수명주기
+### P1.2 — External runner와 주문 수명주기
 
-- 참가자별 `user_id` 생성
-- `OrderBook.submit()` 호출
+- 활성 프로필 조회 및 전략 객체 생성
+- 종목별 호가 스냅샷 조회
+- HTTP 주문 API 호출
 - 미체결 주문 ID와 TTL 추적
 - TTL 만료 주문 취소
-- 제출·체결·취소 카운터 기록
+- 제출·취소·이미 종료·요청 실패 카운터 기록
 
 **완료 기준**: 여러 tick 실행 후 봇 주문이 무한히 누적되지 않고, 체결·취소 통계를 확인할 수 있다.
 
-### P1.3 — DRF 제어 API
+### P1.3 — 트레이더 프로필과 거래 API
 
-- start/stop/status/tick endpoint
-- 시작 중복 호출 방지
-- stop 후 thread 종료 확인
-- `DEBUG` 환경에서만 start endpoint 사용 허용
+- 트레이더 프로필 CRUD endpoint
+- 호가 조회·주문 제출·주문 취소 endpoint
+- `DEBUG` 환경에서만 프로필 변경 허용
+- backend 내부 실행 endpoint를 제공하지 않음
 
-**완료 기준**: HTTP API로 20명 참여자 시뮬레이션을 시작하고 상태를 조회할 수 있다.
+**완료 기준**: runner가 HTTP API만으로 활성 프로필을 실행하고, backend 프로세스에는 봇 tick thread가 존재하지 않는다.
 
 ### P1.4 — 통합 테스트와 실험 시나리오
 
-- 수동 tick이 주문·체결·취소를 만든다.
+- external runner의 tick이 호가 조회·주문·취소를 만든다.
 - 동일 seed 실행 결과가 재현된다.
-- 사용자 주문이 봇 주문과 체결된다.
-- LP 활성화 여부를 제외한 일반 참가자 시나리오가 동작한다.
+- 네 전략의 주문 방향과 가격이 정의된 규칙을 따른다.
+- LP가 같은 tick에 bid와 ask를 모두 제출한다.
 
-**완료 기준**: `make backend-test`와 수동 tick 시나리오가 성공한다.
+**완료 기준**: `make backend-test`와 `make participant-runner-test`가 성공한다.
 
 ---
 
 ## 7. 관측 항목
 
-Stage 3 Prometheus 도입 전에는 status API와 테스트 결과로 확인한다.
+Stage 3 Prometheus 도입 전에는 runner의 주기적 상태 로그와 테스트 결과로 확인한다.
 
 | 항목 | 의미 |
 |---|---|
 | `ticks_total` | 실행된 tick 수 |
 | `orders_submitted_total` | 봇이 낸 주문 수 |
 | `orders_canceled_total` | TTL로 취소된 주문 수 |
-| `trades_generated_total` | 봇 주문으로 발생한 체결 수 |
-| `open_bot_orders` | 현재 미체결 봇 주문 수 |
-| `last_error` | 마지막 실행 오류 |
+| `orders_already_closed_total` | TTL 취소 전에 이미 체결·취소된 주문 수 |
+| `request_failures_total` | 호가 조회·주문·취소 HTTP 실패 수 |
+| `open_runner_orders` | runner가 추적하는 현재 미체결 주문 수 |
 
 Prometheus 도입 후에는 위 항목을 metric으로 승격하고, k6 주문 흐름과 함께 대시보드에서 비교한다.
 
@@ -250,8 +229,8 @@ KRX 상위 100개 종목 수집은 별도 작업이다. 이 시뮬레이터의 �
 - 최근 종가를 `reference_price` 기본값으로 사용
 - 거래대금을 참가자 수·주문 빈도 가중치에 반영
 
-외부 API 호출은 tick 또는 주문 요청 경로에서 수행하지 않는다.
+KRX 같은 외부 참조 API 호출은 tick 또는 주문 요청 경로에서 수행하지 않는다.
 
 ---
 
-*Last updated: 2026-07-25*
+*Last updated: 2026-08-13 — external runner 전용 실행과 4개 전략 반영*

@@ -3,17 +3,20 @@ from random import Random
 from django.core.management.base import BaseCommand, CommandError
 
 from exchange.models import TraderProfile
+from exchange.participants import SUPPORTED_STRATEGIES
 
 
 class Command(BaseCommand):
-    help = "Create or update deterministic demo NoiseTrader profiles."
+    help = "Create or update deterministic demo trader profiles."
 
     def add_arguments(self, parser) -> None:
         parser.add_argument("--count", type=int, default=100)
         parser.add_argument("--seed", type=int, default=42)
+        parser.add_argument("--strategy", choices=SUPPORTED_STRATEGIES, default="noise")
 
     def handle(self, *args, **options) -> None:
         count = options["count"]
+        strategy = options["strategy"]
         if not 1 <= count <= 1_000:
             raise CommandError("count must be between 1 and 1000")
 
@@ -23,10 +26,10 @@ class Command(BaseCommand):
         for index in range(1, count + 1):
             quantity_min = random.randint(1, 5)
             _, was_created = TraderProfile.objects.update_or_create(
-                user_id=f"random-noise-user-{index:03d}",
+                user_id=f"random-{strategy}-user-{index:03d}",
                 defaults={
-                    "name": f"random-noise-{index:03d}",
-                    "strategy": TraderProfile.Strategy.NOISE,
+                    "name": f"random-{strategy}-{index:03d}",
+                    "strategy": strategy,
                     "enabled": True,
                     "symbol": "005930",
                     "reference_price": random.randrange(65_000, 75_100, 100),
@@ -44,6 +47,8 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"seeded demo traders: created={created} updated={updated} count={count} seed={options['seed']}"
+                "seeded demo traders: "
+                f"strategy={strategy} created={created} updated={updated} "
+                f"count={count} seed={options['seed']}"
             )
         )

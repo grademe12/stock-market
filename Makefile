@@ -27,6 +27,7 @@ BACKEND_DIR ?= backend
 BACKEND_PYTHON ?= $(BACKEND_DIR)/.venv/bin/python
 TRADER_COUNT ?= 100
 TRADER_SEED ?= 42
+TRADER_STRATEGY ?= noise
 ORDER_RATE ?= 10
 TEST_DURATION ?= 30s
 LOADTEST_ARTIFACTS_DIR ?= .artifacts/loadtest
@@ -75,7 +76,7 @@ demo-up: ## Start the packaged backend for the reproducible demo
 	docker compose up --build -d backend
 
 demo-seed: ## Create deterministic demo trader profiles in the running backend
-	docker compose exec -T backend python manage.py seed_traders --count $(TRADER_COUNT) --seed $(TRADER_SEED)
+	docker compose exec -T backend python manage.py seed_traders --strategy $(TRADER_STRATEGY) --count $(TRADER_COUNT) --seed $(TRADER_SEED)
 
 demo-runner-up: ## Start the external participant runner with the local .env settings
 	docker compose --profile runner up --build -d participant-runner
