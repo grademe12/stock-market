@@ -23,6 +23,9 @@ Terraform creates only the infrastructure discussed for this stage:
 - one public-IP Cloud SQL PostgreSQL instance with no authorized network;
 - one VM service account with Cloud SQL Client and telemetry writer roles.
 
+The development database uses the Cloud SQL `ENTERPRISE` edition explicitly so
+the shared-core `db-f1-micro` tier remains valid with PostgreSQL 17.
+
 Terraform state is stored in the versioned GCS bucket
 `stock-market-505109-terraform-state` under the `infra/dev` prefix.
 
