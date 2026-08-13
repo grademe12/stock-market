@@ -23,6 +23,9 @@ Terraform creates only the infrastructure discussed for this stage:
 - one public-IP Cloud SQL PostgreSQL instance with no authorized network;
 - one VM service account with Cloud SQL Client and telemetry writer roles.
 
+Terraform state is stored in the versioned GCS bucket
+`stock-market-505109-terraform-state` under the `infra/dev` prefix.
+
 Cloud SQL Auth Proxy is not a Terraform resource. It will run on the VM and use
 the attached service account, so no service-account JSON key is required. The
 database user/password and backend/proxy deployment are intentionally deferred.
