@@ -4,7 +4,7 @@
 >
 > 이 문서의 기본 대상은 시장조성자가 아닌 일반 거래 참여자다. 시장조성자/유동성공급자 전략은 비교 실험을 위한 선택 항목으로만 둔다.
 
-**관련 문서**: [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) · [KRX_TOP100_REFERENCE_DATA_PLAN.md](./KRX_TOP100_REFERENCE_DATA_PLAN.md)
+**관련 문서**: [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) · [KRX_TOP100_REFERENCE_DATA_PLAN.md](./KRX_TOP100_REFERENCE_DATA_PLAN.md) · [NEWS_TRIGGERED_LOAD_SPIKE_PLAN.md](./NEWS_TRIGGERED_LOAD_SPIKE_PLAN.md)
 
 **현재 상태**: Noise·Momentum·Mean-Reversion·선택적 LP, TTL 기반 주문 취소, 트레이더별 영속 설정 CRUD API와 별도 HTTP participant-runner 구현 완료. 모든 트레이더는 external runner에서만 실행하며 Django 내부 runtime은 사용하지 않는다.
 
