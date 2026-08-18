@@ -11,6 +11,7 @@ class TraderProfile(models.Model):
         MOMENTUM = "momentum", "Momentum"
         MEAN_REVERSION = "mean_reversion", "Mean Reversion"
         LIQUIDITY_PROVIDER = "liquidity_provider", "Liquidity Provider"
+        EVENT_REACTIVE = "event_reactive", "Event Reactive"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100, unique=True)

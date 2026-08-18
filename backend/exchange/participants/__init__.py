@@ -11,6 +11,7 @@ from exchange.participants.events import (
     ResolvedReactionPlan,
 )
 from exchange.participants.traders import (
+    EventReactiveTrader,
     LiquidityProvider,
     MeanReversionTrader,
     MomentumTrader,
@@ -27,6 +28,7 @@ from exchange.participants.types import (
 __all__ = [
     "DirectionHint",
     "EventPreset",
+    "EventReactiveTrader",
     "LiquidityProvider",
     "MeanReversionTrader",
     "MomentumTrader",

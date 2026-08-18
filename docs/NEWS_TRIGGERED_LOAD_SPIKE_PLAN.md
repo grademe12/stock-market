@@ -1,6 +1,6 @@
 # 뉴스 트리거 기반 휴면 트레이더 주문 spike 구현 계획
 
-> **상태**: B0 도메인 계약·결정론적 planner 구현 완료. B1 이후의 프로필·runner 연동은 미구현. 수치와 외부 뉴스 제공자는 미확정.
+> **상태**: B0 planner와 B1 `EventReactiveTrader`·프로필까지 구현 완료. B2 이후의 runner fixture 연동은 미구현. 수치와 외부 뉴스 제공자는 미확정.
 >
 > **목적**: 뉴스·공시·풍문 같은 외부 사건을 접한 휴면 상태의 가상 트레이더들이 무작위·시간차를 두고 시장에 진입하게 해 backend API에 갑작스런 주문 spike를 만든다.
 >
@@ -301,7 +301,7 @@ runner가 예정한 주문을 보내지 못했을 때는 backend 병목으로 �
 
 **Exit gate 달성**: HTTP 없이 휴면 풀의 활성 대상과 tick별 주문 예정 수를 재현하고, 입력 순서가 달라도 같은 계획을 생성하는 테스트를 통과한다.
 
-### B1 — EventReactiveTrader와 프로필
+### B1 — EventReactiveTrader와 프로필 (완료)
 
 - `TraderProfile.Strategy.EVENT_REACTIVE` 선택값과 migration
 - 평상시 주문하지 않는 `EventReactiveTrader`
@@ -309,7 +309,7 @@ runner가 예정한 주문을 보내지 못했을 때는 backend 병목으로 �
 - `seed_traders --strategy event_reactive`와 휴면 풀 생성 문서
 - 빈 호가창·한쪽 호가·가격 하한 테스트
 
-**Exit gate**: 이벤트 전에는 주문이 없고, 이벤트 활성 계획에서만 정해진 주문을 만든다.
+**Exit gate 달성**: 이벤트 전에는 주문이 없고, 이벤트 활성 계획에서만 정해진 주문을 만든다. runner가 fixture를 주기 전에는 seed된 프로필도 주문을 내지 않는다.
 
 ### B2 — external runner fixture 연동
 
@@ -413,4 +413,4 @@ runner가 예정한 주문을 보내지 못했을 때는 backend 병목으로 �
 
 ---
 
-*Last updated: 2026-08-14 — B0 이벤트 계약·preset·결정론적 reaction planner 구현 반영*
+*Last updated: 2026-08-18 — B1 EventReactiveTrader·event_reactive 프로필 구현 반영*

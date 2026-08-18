@@ -6,7 +6,7 @@
 
 **관련 문서**: [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) · [KRX_TOP100_REFERENCE_DATA_PLAN.md](./KRX_TOP100_REFERENCE_DATA_PLAN.md) · [NEWS_TRIGGERED_LOAD_SPIKE_PLAN.md](./NEWS_TRIGGERED_LOAD_SPIKE_PLAN.md)
 
-**현재 상태**: Noise·Momentum·Mean-Reversion·선택적 LP, TTL 기반 주문 취소, 트레이더별 영속 설정 CRUD API와 별도 HTTP participant-runner 구현 완료. 모든 트레이더는 external runner에서만 실행하며 Django 내부 runtime은 사용하지 않는다.
+**현재 상태**: Noise·Momentum·Mean-Reversion·선택적 LP·휴면 EventReactive, TTL 기반 주문 취소, 트레이더별 영속 설정 CRUD API와 별도 HTTP participant-runner 구현 완료. EventReactive는 프로필과 주문 변환까지 있으며, runner fixture 연동은 후속 작업이다. 모든 트레이더는 external runner에서만 실행하며 Django 내부 runtime은 사용하지 않는다.
 
 ---
 
@@ -166,7 +166,7 @@ runner는 `enabled=true`인 트레이더만 실행한다. `TRADER_IDS`와 `MAX_T
 ### P1.1 — 참여자 도메인 모델
 
 - `TradingParticipant` 프로토콜
-- 네 가지 전략의 0~2개 주문 의도 생성
+- 기존 네 전략의 0~2개 주문 의도와 EventReactive의 계획된 주문 변환
 - 주문 의도(`OrderIntent`)와 난수 seed 관리
 
 **완료 기준**: 같은 seed·tick·호가 스냅샷에서 동일한 주문 의도가 생성되고, 각 전략의 방향·가격 규칙이 단위 테스트로 검증된다.
@@ -195,7 +195,8 @@ runner는 `enabled=true`인 트레이더만 실행한다. `TRADER_IDS`와 `MAX_T
 
 - external runner의 tick이 호가 조회·주문·취소를 만든다.
 - 동일 seed 실행 결과가 재현된다.
-- 네 전략의 주문 방향과 가격이 정의된 규칙을 따른다.
+- 기존 네 전략의 주문 방향과 가격이 정의된 규칙을 따른다.
+- EventReactive는 이벤트 전·후 휴면이며 활성 계획의 예정 tick에서만 주문한다.
 - LP가 같은 tick에 bid와 ask를 모두 제출한다.
 
 **완료 기준**: `make backend-test`와 `make participant-runner-test`가 성공한다.
@@ -233,4 +234,4 @@ KRX 같은 외부 참조 API 호출은 tick 또는 주문 요청 경로에서 �
 
 ---
 
-*Last updated: 2026-08-13 — external runner 전용 실행과 4개 전략 반영*
+*Last updated: 2026-08-18 — EventReactive 휴면 전략 반영*

@@ -56,12 +56,13 @@ sequenceDiagram
 
 모든 트레이더는 `participant-runner`에서만 실행된다. Django 내부 background 실행 경로는 사용하지 않으며, runner는 시작 시 활성화된 트레이더 프로필을 조회한다. 매 tick마다 종목별 호가 스냅샷을 한 번 읽고 전략에 전달한다.
 
-현재 구현된 전략은 다음 네 가지다.
+현재 구현된 전략은 다음 다섯 가지다.
 
 - `NoiseTrader`: seed 기반으로 방향·기준가 주변 가격·수량을 무작위 생성한다.
 - `MomentumTrader`: 직전 midpoint보다 상승하면 최우선 매도호가에 매수하고, 하락하면 최우선 매수호가에 매도한다.
 - `MeanReversionTrader`: midpoint가 기준가에서 한 호가 이상 낮으면 매수하고, 한 호가 이상 높으면 매도한다.
 - `LiquidityProvider`: midpoint를 중심으로 한 호가 아래 매수와 한 호가 위 매도를 함께 낸다.
+- `EventReactiveTrader`: 평소에는 주문하지 않는다. 활성 반응 계획이 있으면 예정 tick에만 계획된 방향·수량으로 주문한다. runner fixture 연동은 아직 없다.
 
 각 트레이더는 `interval_ticks` 주기마다 한 번만 주문 의도를 만든다. runner는 이 의도를 실제 HTTP 주문 API로 전송하고, 응답의 잔량이 0보다 큰 주문 ID만 자체 메모리에 추적한다. 추적된 주문은 `order_ttl_ticks`가 지나면 취소 API로 제거한다. 그 사이 다른 주문과 체결되어 이미 사라진 주문은 `ALREADY_CLOSED`로 처리하며, 정상적인 경쟁 상황으로 집계한다.
 
@@ -69,7 +70,7 @@ sequenceDiagram
 
 ### 가상 시장참여자
 
-- 네 가지 전략을 사용하는 트레이더 프로필 관리 API
+- 다섯 가지 전략을 사용하는 트레이더 프로필 관리 API
 - 주문 가격 범위, 수량, 제출 주기, 주문 유효 tick 등 트레이더별 설정
 - 결정론적으로 트레이더 프로필을 생성·갱신하는 `seed_traders` 명령
 - backend와 분리된 `participant-runner` 프로세스/컨테이너

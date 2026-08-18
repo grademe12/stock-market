@@ -1,6 +1,7 @@
 from random import Random
 
 from exchange.orderbook import BookSnapshot, OrderSide
+from exchange.participants.events import ResolvedReactionPlan
 from exchange.participants.types import OrderIntent, TraderSettings, TradingParticipant
 
 
@@ -110,6 +111,59 @@ class MeanReversionTrader(BaseTrader):
         return ()
 
 
+class EventReactiveTrader(BaseTrader):
+    """Stay dormant until a resolved news-reaction plan is applied."""
+
+    def __init__(self, settings: TraderSettings) -> None:
+        super().__init__(settings)
+        self._plan: ResolvedReactionPlan | None = None
+
+    def apply_plan(self, plan: ResolvedReactionPlan) -> None:
+        if plan.user_id != self.user_id:
+            raise ValueError("reaction plan user_id must match the trader")
+        if plan.symbol != self.symbol:
+            raise ValueError("reaction plan symbol must match the trader")
+        self._plan = plan
+
+    def next_intents(self, tick: int, snapshot: BookSnapshot) -> tuple[OrderIntent, ...]:
+        plan = self._plan
+        if plan is None or not plan.activated:
+            return ()
+
+        return tuple(
+            self._reaction_intent(plan, index, snapshot)
+            for index, due_tick in enumerate(plan.order_tick_offsets)
+            if due_tick == tick
+        )
+
+    def _reaction_intent(
+        self,
+        plan: ResolvedReactionPlan,
+        index: int,
+        snapshot: BookSnapshot,
+    ) -> OrderIntent:
+        side = plan.sides[index]
+        return OrderIntent(
+            user_id=self.user_id,
+            symbol=self.symbol,
+            side=side,
+            price=self._reaction_price(side, snapshot),
+            quantity=plan.quantities[index],
+            order_ttl_ticks=plan.ttl_ticks[index],
+        )
+
+    def _reaction_price(self, side: OrderSide, snapshot: BookSnapshot) -> int:
+        if side is OrderSide.BUY:
+            if snapshot.asks:
+                return snapshot.asks[0].price
+            fallback = self._settings.reference_price + self._settings.price_step
+        elif snapshot.bids:
+            return snapshot.bids[0].price
+        else:
+            fallback = self._settings.reference_price - self._settings.price_step
+        return max(self._settings.price_step, fallback)
+
+
 class LiquidityProvider(BaseTrader):
     """Place one passive bid and ask around the current midpoint each due tick."""
 
@@ -136,6 +190,7 @@ def build_trader(settings: TraderSettings) -> TradingParticipant:
         "momentum": MomentumTrader,
         "mean_reversion": MeanReversionTrader,
         "liquidity_provider": LiquidityProvider,
+        "event_reactive": EventReactiveTrader,
     }
     try:
         trader_class = traders[settings.strategy]

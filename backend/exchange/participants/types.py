@@ -9,6 +9,7 @@ SUPPORTED_STRATEGIES = (
     "momentum",
     "mean_reversion",
     "liquidity_provider",
+    "event_reactive",
 )
 
 

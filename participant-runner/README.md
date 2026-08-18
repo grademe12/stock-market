@@ -12,6 +12,7 @@ runner는 매 tick마다 종목별 호가를 한 번 조회하고 아래 전략�
 | `momentum` | 직전 midpoint 대비 상승 시 best ask 매수, 하락 시 best bid 매도, 최초·보합 tick은 대기 |
 | `mean_reversion` | midpoint가 기준가보다 한 호가 이상 낮으면 best ask 매수, 높으면 best bid 매도 |
 | `liquidity_provider` | midpoint 한 호가 아래 bid와 한 호가 위 ask를 같은 tick에 제출 |
+| `event_reactive` | 평소 휴면. 활성 반응 계획이 있을 때만 예정 tick에 계획된 방향·수량으로 주문 |
 
 midpoint는 양쪽 호가가 있으면 두 최우선 호가의 평균, 한쪽만 있으면 해당 가격, 빈 호가창이면 프로필의 `reference_price`다. LP의 중심가는 `max_offset_steps × price_step` 범위 안에서 기준가 주변으로 제한한다. 모든 미체결 주문에는 프로필의 `order_ttl_ticks`가 적용된다.
 

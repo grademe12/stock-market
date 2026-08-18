@@ -132,7 +132,13 @@ class TraderProfileApiTests(APITestCase):
 
     def test_all_external_runner_strategies_are_accepted(self):
         for index, strategy in enumerate(
-            ("noise", "momentum", "mean_reversion", "liquidity_provider"),
+            (
+                "noise",
+                "momentum",
+                "mean_reversion",
+                "liquidity_provider",
+                "event_reactive",
+            ),
             start=1,
         ):
             response = self.client.post(
@@ -181,7 +187,13 @@ class SeedTradersCommandTests(APITestCase):
         self.assertEqual(first_run, second_run)
 
     def test_seed_command_supports_each_external_strategy(self):
-        strategies = ("noise", "momentum", "mean_reversion", "liquidity_provider")
+        strategies = (
+            "noise",
+            "momentum",
+            "mean_reversion",
+            "liquidity_provider",
+            "event_reactive",
+        )
 
         for strategy in strategies:
             call_command("seed_traders", count=1, seed=42, strategy=strategy)

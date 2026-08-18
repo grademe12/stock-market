@@ -137,7 +137,13 @@ class ParticipantRunnerTests(TestCase):
     def test_profile_selection_builds_all_strategies(self) -> None:
         profiles = []
         for index, strategy in enumerate(
-            ("noise", "momentum", "mean_reversion", "liquidity_provider"),
+            (
+                "noise",
+                "momentum",
+                "mean_reversion",
+                "liquidity_provider",
+                "event_reactive",
+            ),
             start=1,
         ):
             profiles.append(
@@ -160,12 +166,13 @@ class ParticipantRunnerTests(TestCase):
 
         participants = build_participants(profiles)
 
-        self.assertEqual(len(participants), 4)
+        self.assertEqual(len(participants), 5)
         self.assertEqual([participant.user_id for participant in participants], [
             "noise-1",
             "momentum-2",
             "mean_reversion-3",
             "liquidity_provider-4",
+            "event_reactive-5",
         ])
 
     def test_runner_emits_periodic_status_and_cleans_up_on_stop(self) -> None:

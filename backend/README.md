@@ -55,7 +55,10 @@ make demo-logs
 make demo-seed TRADER_STRATEGY=momentum TRADER_COUNT=20
 make demo-seed TRADER_STRATEGY=mean_reversion TRADER_COUNT=20
 make demo-seed TRADER_STRATEGY=liquidity_provider TRADER_COUNT=5
+make demo-seed TRADER_STRATEGY=event_reactive TRADER_COUNT=50
 ```
+
+`event_reactive`는 뉴스 반응용 휴면 풀이다. 프로필을 만들어도 runner가 반응 계획을 적용하기 전에는 주문을 제출하지 않는다.
 
 정리와 상세 실행 순서는 [데모 runbook](../docs/DEMO_RUNBOOK.md)을 참고한다.
 
@@ -76,7 +79,7 @@ make demo-seed TRADER_STRATEGY=liquidity_provider TRADER_COUNT=5
 
 주문 취소는 idempotent하다. 열린 주문은 `status: CANCELED`로 취소되고, 이미 체결·취소되어 호가창에 없는 주문은 `status: ALREADY_CLOSED`로 정상 응답한다. 이는 TTL 기반 runner의 지연 취소를 오류와 구분하기 위한 현재 단계의 계약이다.
 
-트레이더 설정은 PostgreSQL의 `TraderProfile`로 보관하며, 프론트엔드가 위 API를 통해 그대로 편집할 수 있다. 설정에는 이름·가상 사용자 ID·활성화 여부·종목·기준가·가격 단위·가격 오프셋·수량 범위·주문 TTL·개별 실행 주기·seed가 포함된다. 현재 지원 전략은 `noise`, `momentum`, `mean_reversion`, `liquidity_provider`이고 종목은 `005930` 하나다.
+트레이더 설정은 PostgreSQL의 `TraderProfile`로 보관하며, 프론트엔드가 위 API를 통해 그대로 편집할 수 있다. 설정에는 이름·가상 사용자 ID·활성화 여부·종목·기준가·가격 단위·가격 오프셋·수량 범위·주문 TTL·개별 실행 주기·seed가 포함된다. 현재 지원 전략은 `noise`, `momentum`, `mean_reversion`, `liquidity_provider`, `event_reactive`이고 종목은 `005930` 하나다. `event_reactive`는 이벤트가 없으면 주문하지 않는다.
 
 모든 트레이더는 backend 밖의 `participant-runner`에서만 실행한다. backend 내부 background thread와 start/stop/manual-tick API는 더 이상 제공하지 않는다. runner는 시작할 때 활성 프로필을 조회하며, `TRADER_IDS` 또는 `MAX_TRADERS`로 실행 대상을 제한한다. 설정 변경은 다음 runner 재시작부터 반영된다.
 

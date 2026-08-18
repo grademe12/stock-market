@@ -22,7 +22,10 @@ make demo-logs
 make demo-seed TRADER_STRATEGY=momentum TRADER_COUNT=20 TRADER_SEED=42
 make demo-seed TRADER_STRATEGY=mean_reversion TRADER_COUNT=20 TRADER_SEED=42
 make demo-seed TRADER_STRATEGY=liquidity_provider TRADER_COUNT=5 TRADER_SEED=42
+make demo-seed TRADER_STRATEGY=event_reactive TRADER_COUNT=50 TRADER_SEED=42
 ```
+
+`event_reactive` 프로필은 휴면 풀이다. `enabled=true`여도 runner fixture(B2)가 반응 계획을 주기 전에는 주문을 내지 않는다.
 
 개인 runner 범위는 Git 제외 파일 `participant-runner/.env`에서 조정한다.
 
