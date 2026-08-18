@@ -25,7 +25,16 @@ make demo-seed TRADER_STRATEGY=liquidity_provider TRADER_COUNT=5 TRADER_SEED=42
 make demo-seed TRADER_STRATEGY=event_reactive TRADER_COUNT=50 TRADER_SEED=42
 ```
 
-`event_reactive` 프로필은 휴면 풀이다. `enabled=true`여도 runner fixture(B2)가 반응 계획을 주기 전에는 주문을 내지 않는다.
+`event_reactive` 프로필은 휴면 풀이다. 시나리오 fixture가 없으면 주문을 내지 않는다. 뉴스 spike를 재현하려면 baseline과 휴면 풀을 같이 만든 뒤 fixture를 넘긴다.
+
+```bash
+make demo-seed TRADER_STRATEGY=noise TRADER_COUNT=20 TRADER_SEED=42
+make demo-seed TRADER_STRATEGY=event_reactive TRADER_COUNT=50 TRADER_SEED=42
+make demo-runner-up SCENARIO_PATH=/app/scenarios/breaking_news.json
+make demo-logs
+```
+
+기본 fixture는 시작 후 30초에 `breaking_news` 이벤트를 한 번 발생시킨다. 로그에서 `event=news_received`, `event=news_activated`, `event=news_first_reaction`, `event=news_completed`를 확인할 수 있다. 이벤트 구간이 끝나면 `event_reactive`는 다시 휴면하고 baseline 트레이더만 남는다.
 
 개인 runner 범위는 Git 제외 파일 `participant-runner/.env`에서 조정한다.
 

@@ -192,12 +192,16 @@ class EventReactiveTraderTests(SimpleTestCase):
 
     def test_empty_and_one_sided_books_use_reference_price_fallback(self) -> None:
         trader = EventReactiveTrader(self.settings())
-        trader.apply_plan(self.plan(sides=(OrderSide.BUY,), quantities=(1,), ttl_ticks=(3,), order_tick_offsets=(1,)))
+        buy_plan = self.plan(sides=(OrderSide.BUY,), quantities=(1,), ttl_ticks=(3,), order_tick_offsets=(1,))
+        trader.apply_plan(buy_plan)
         empty_buy = trader.next_intents(1, self.snapshot())
+        trader.apply_plan(buy_plan)
         bid_only_buy = trader.next_intents(1, self.snapshot(bid=69_900))
 
-        trader.apply_plan(self.plan(sides=(OrderSide.SELL,), quantities=(1,), ttl_ticks=(3,), order_tick_offsets=(1,)))
+        sell_plan = self.plan(sides=(OrderSide.SELL,), quantities=(1,), ttl_ticks=(3,), order_tick_offsets=(1,))
+        trader.apply_plan(sell_plan)
         empty_sell = trader.next_intents(1, self.snapshot())
+        trader.apply_plan(sell_plan)
         ask_only_sell = trader.next_intents(1, self.snapshot(ask=70_100))
 
         self.assertEqual(empty_buy[0].price, 70_100)
@@ -220,3 +224,17 @@ class EventReactiveTraderTests(SimpleTestCase):
             trader.apply_plan(self.plan(user_id="other-trader"))
         with self.assertRaisesMessage(ValueError, "symbol"):
             trader.apply_plan(self.plan(symbol="000660"))
+
+    def test_late_orders_are_dropped_instead_of_catching_up(self) -> None:
+        trader = EventReactiveTrader(self.settings())
+        trader.apply_plan(self.plan())
+
+        dropped = trader.drop_late_orders(
+            elapsed_ms=10_000,
+            tick_interval_ms=100,
+            max_scheduler_lag_ms=2_000,
+        )
+
+        self.assertEqual(dropped, 2)
+        self.assertEqual(trader.remaining_reaction_orders, 0)
+        self.assertEqual(trader.next_intents(5, self.snapshot(69_900, 70_100)), ())

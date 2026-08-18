@@ -6,7 +6,7 @@
 
 **관련 문서**: [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) · [KRX_TOP100_REFERENCE_DATA_PLAN.md](./KRX_TOP100_REFERENCE_DATA_PLAN.md) · [NEWS_TRIGGERED_LOAD_SPIKE_PLAN.md](./NEWS_TRIGGERED_LOAD_SPIKE_PLAN.md)
 
-**현재 상태**: Noise·Momentum·Mean-Reversion·선택적 LP·휴면 EventReactive, TTL 기반 주문 취소, 트레이더별 영속 설정 CRUD API와 별도 HTTP participant-runner 구현 완료. EventReactive는 프로필과 주문 변환까지 있으며, runner fixture 연동은 후속 작업이다. 모든 트레이더는 external runner에서만 실행하며 Django 내부 runtime은 사용하지 않는다.
+**현재 상태**: Noise·Momentum·Mean-Reversion·선택적 LP·휴면 EventReactive, TTL 기반 주문 취소, 트레이더별 영속 설정 CRUD API와 별도 HTTP participant-runner 구현 완료. EventReactive는 `--scenario` fixture로 깨어나며, 실제 뉴스 adapter와 비교 계측은 후속 작업이다. 모든 트레이더는 external runner에서만 실행하며 Django 내부 runtime은 사용하지 않는다.
 
 ---
 
@@ -234,4 +234,4 @@ KRX 같은 외부 참조 API 호출은 tick 또는 주문 요청 경로에서 �
 
 ---
 
-*Last updated: 2026-08-18 — EventReactive 휴면 전략 반영*
+*Last updated: 2026-08-18 — EventReactive scenario fixture 연동 반영*

@@ -63,6 +63,7 @@ services:
         required: false
     environment:
       BACKEND_BASE_URL: http://backend:8000
+      SCENARIO_PATH: ${SCENARIO_PATH:-}
     depends_on:
       backend:
         condition: service_healthy

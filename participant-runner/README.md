@@ -29,6 +29,7 @@ midpoint는 양쪽 호가가 있으면 두 최우선 호가의 평균, 한쪽만
 | `RUNNER_STATUS_LOG_INTERVAL_TICKS` | `60` | 상태 요약 로그 출력 주기 |
 | `MAX_TRADERS` | unlimited | 활성 프로필 중 이 컨테이너가 실행할 최대 수 |
 | `TRADER_IDS` | all enabled | 쉼표로 구분한 특정 트레이더 ID |
+| `SCENARIO_PATH` | unset | 뉴스 fixture JSON 경로. `--scenario`가 있으면 CLI가 우선한다 |
 
 `MAX_TRADERS=20`은 20명을 자동 생성하지 않는다. 백엔드에서 활성 프로필을 20개 만든 뒤, 이 runner가 최대 20개를 선택하도록 제한한다.
 
@@ -41,9 +42,10 @@ make backend-run
 cd participant-runner
 PYTHONPATH=../backend python -m participant_runner --once
 PYTHONPATH=../backend python -m participant_runner
+PYTHONPATH=../backend python -m participant_runner --scenario scenarios/breaking_news.json
 ```
 
-시작 시 프로필을 한 번 읽는다. 실행 중 프로필 변경은 다음 runner 재시작부터 적용된다. 종료 신호(`Ctrl+C`, `SIGTERM`)를 받으면 추적 중인 미체결 runner 주문을 취소한다.
+`--scenario` 또는 `SCENARIO_PATH`가 있으면 fixture의 이벤트를 `event_reactive` 트레이더에만 적용한다. 기존 baseline 전략은 이벤트와 관계없이 계속 주문한다. 시작 시 프로필을 한 번 읽는다. 실행 중 프로필 변경은 다음 runner 재시작부터 적용된다. 종료 신호(`Ctrl+C`, `SIGTERM`)를 받으면 추적 중인 미체결 runner 주문을 취소한다.
 
 ## Container run
 

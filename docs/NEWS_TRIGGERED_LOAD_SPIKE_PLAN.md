@@ -1,6 +1,6 @@
 # 뉴스 트리거 기반 휴면 트레이더 주문 spike 구현 계획
 
-> **상태**: B0 planner와 B1 `EventReactiveTrader`·프로필까지 구현 완료. B2 이후의 runner fixture 연동은 미구현. 수치와 외부 뉴스 제공자는 미확정.
+> **상태**: B0 planner, B1 `EventReactiveTrader`, B2 runner `--scenario` fixture 연동까지 구현 완료. B3 계측 실험과 외부 뉴스 제공자는 미구현.
 >
 > **목적**: 뉴스·공시·풍문 같은 외부 사건을 접한 휴면 상태의 가상 트레이더들이 무작위·시간차를 두고 시장에 진입하게 해 backend API에 갑작스런 주문 spike를 만든다.
 >
@@ -311,7 +311,7 @@ runner가 예정한 주문을 보내지 못했을 때는 backend 병목으로 �
 
 **Exit gate 달성**: 이벤트 전에는 주문이 없고, 이벤트 활성 계획에서만 정해진 주문을 만든다. runner가 fixture를 주기 전에는 seed된 프로필도 주문을 내지 않는다.
 
-### B2 — external runner fixture 연동
+### B2 — external runner fixture 연동 (완료)
 
 - `--scenario` 로더와 JSON schema 검증
 - `EventCoordinator`를 기존 runner tick·호가 스냅샷·TTL 취소 경로와 결합
@@ -320,7 +320,7 @@ runner가 예정한 주문을 보내지 못했을 때는 backend 병목으로 �
 - 예정·제출·유실 반응과 scheduler lag 카운터
 - runner 정상 종료 시 미체결 주문 정리 유지
 
-**Exit gate**: baseline 구간 → 휴면 트레이더 spike → baseline 구간을 하나의 fixture로 재현한다.
+**Exit gate 달성**: `participant-runner/scenarios/breaking_news.json`으로 baseline → 휴면 트레이더 spike → 다시 baseline을 재현한다. 이벤트 처리 실패는 baseline 루프를 중단하지 않는다.
 
 ### B3 — 비교 실험과 계측
 
@@ -413,4 +413,4 @@ runner가 예정한 주문을 보내지 못했을 때는 backend 병목으로 �
 
 ---
 
-*Last updated: 2026-08-18 — B1 EventReactiveTrader·event_reactive 프로필 구현 반영*
+*Last updated: 2026-08-18 — B2 runner scenario fixture·EventCoordinator 구현 반영*

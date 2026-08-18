@@ -30,6 +30,7 @@ TRADER_SEED ?= 42
 TRADER_STRATEGY ?= noise
 ORDER_RATE ?= 10
 TEST_DURATION ?= 30s
+SCENARIO_PATH ?=
 LOADTEST_ARTIFACTS_DIR ?= .artifacts/loadtest
 TRADE_DATE ?=
 
@@ -79,7 +80,7 @@ demo-seed: ## Create deterministic demo trader profiles in the running backend
 	docker compose exec -T backend python manage.py seed_traders --strategy $(TRADER_STRATEGY) --count $(TRADER_COUNT) --seed $(TRADER_SEED)
 
 demo-runner-up: ## Start the external participant runner with the local .env settings
-	docker compose --profile runner up --build -d participant-runner
+	SCENARIO_PATH=$(SCENARIO_PATH) docker compose --profile runner up --build -d participant-runner
 
 demo-logs: ## Follow backend and runner logs for the demo
 	docker compose --profile runner logs -f backend participant-runner

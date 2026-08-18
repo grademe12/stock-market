@@ -9,5 +9,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # The runner reuses only the framework-independent participant and order types.
 COPY backend/exchange /app/backend/exchange
 COPY participant-runner/participant_runner /app/participant_runner
+COPY participant-runner/scenarios /app/scenarios
 
 ENTRYPOINT ["python", "-m", "participant_runner"]

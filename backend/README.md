@@ -58,7 +58,7 @@ make demo-seed TRADER_STRATEGY=liquidity_provider TRADER_COUNT=5
 make demo-seed TRADER_STRATEGY=event_reactive TRADER_COUNT=50
 ```
 
-`event_reactive`는 뉴스 반응용 휴면 풀이다. 프로필을 만들어도 runner가 반응 계획을 적용하기 전에는 주문을 제출하지 않는다.
+`event_reactive`는 뉴스 반응용 휴면 풀이다. runner에 `--scenario` 또는 `SCENARIO_PATH`로 fixture를 줄 때만 반응 주문을 낸다.
 
 정리와 상세 실행 순서는 [데모 runbook](../docs/DEMO_RUNBOOK.md)을 참고한다.
 

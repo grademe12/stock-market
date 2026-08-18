@@ -1,7 +1,7 @@
 from random import Random
 
 from exchange.orderbook import BookSnapshot, OrderSide
-from exchange.participants.events import ResolvedReactionPlan
+from exchange.participants.events import ReactionCandidate, ResolvedReactionPlan
 from exchange.participants.types import OrderIntent, TraderSettings, TradingParticipant
 
 
@@ -117,6 +117,19 @@ class EventReactiveTrader(BaseTrader):
     def __init__(self, settings: TraderSettings) -> None:
         super().__init__(settings)
         self._plan: ResolvedReactionPlan | None = None
+        self._consumed_indexes: set[int] = set()
+
+    def reaction_candidate(self) -> ReactionCandidate:
+        settings = self._settings
+        return ReactionCandidate(
+            user_id=self.user_id,
+            symbol=self.symbol,
+            quantity_min=settings.quantity_min,
+            quantity_max=settings.quantity_max,
+            order_ttl_ticks=settings.order_ttl_ticks,
+            interval_ticks=settings.interval_ticks,
+            seed=settings.seed,
+        )
 
     def apply_plan(self, plan: ResolvedReactionPlan) -> None:
         if plan.user_id != self.user_id:
@@ -124,17 +137,49 @@ class EventReactiveTrader(BaseTrader):
         if plan.symbol != self.symbol:
             raise ValueError("reaction plan symbol must match the trader")
         self._plan = plan
+        self._consumed_indexes = set()
+
+    @property
+    def remaining_reaction_orders(self) -> int:
+        plan = self._plan
+        if plan is None or not plan.activated:
+            return 0
+        return plan.order_count - len(self._consumed_indexes)
+
+    def drop_late_orders(
+        self,
+        elapsed_ms: int,
+        tick_interval_ms: int,
+        max_scheduler_lag_ms: int,
+    ) -> int:
+        plan = self._plan
+        if plan is None or not plan.activated:
+            return 0
+
+        dropped = 0
+        for index, offset in enumerate(plan.order_tick_offsets):
+            if index in self._consumed_indexes:
+                continue
+            scheduled_ms = offset * tick_interval_ms
+            if elapsed_ms - scheduled_ms > max_scheduler_lag_ms:
+                self._consumed_indexes.add(index)
+                dropped += 1
+        return dropped
 
     def next_intents(self, tick: int, snapshot: BookSnapshot) -> tuple[OrderIntent, ...]:
         plan = self._plan
         if plan is None or not plan.activated:
             return ()
 
-        return tuple(
-            self._reaction_intent(plan, index, snapshot)
-            for index, due_tick in enumerate(plan.order_tick_offsets)
-            if due_tick == tick
-        )
+        intents: list[OrderIntent] = []
+        for index, offset in enumerate(plan.order_tick_offsets):
+            if index in self._consumed_indexes:
+                continue
+            if max(offset, 1) != tick:
+                continue
+            self._consumed_indexes.add(index)
+            intents.append(self._reaction_intent(plan, index, snapshot))
+        return tuple(intents)
 
     def _reaction_intent(
         self,

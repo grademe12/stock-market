@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import os
+from pathlib import Path
 
 
 class ConfigurationError(ValueError):
@@ -29,6 +30,7 @@ class RunnerConfig:
     status_log_interval_ticks: int
     max_traders: int | None
     trader_ids: tuple[str, ...]
+    scenario_path: Path | None
 
     @classmethod
     def from_environment(cls) -> "RunnerConfig":
@@ -44,6 +46,7 @@ class RunnerConfig:
         if len(set(trader_ids)) != len(trader_ids):
             raise ConfigurationError("TRADER_IDS must not contain duplicates")
 
+        raw_scenario = os.getenv("SCENARIO_PATH", "").strip()
         return cls(
             backend_base_url=backend_base_url,
             tick_interval_ms=_positive_int("TICK_INTERVAL_MS", 1_000) or 1_000,
@@ -53,4 +56,5 @@ class RunnerConfig:
             ),
             max_traders=_positive_int("MAX_TRADERS"),
             trader_ids=trader_ids,
+            scenario_path=Path(raw_scenario) if raw_scenario else None,
         )

@@ -1,0 +1,14 @@
+{
+  "events": [
+    {
+      "event_id": "shock-001",
+      "symbol": "005930",
+      "starts_after_ms": 30000,
+      "preset": "breaking_news",
+      "direction_hint": "MIXED",
+      "label": "baseline then breaking news spike",
+      "source": "fixture",
+      "seed": 42
+    }
+  ]
+}
