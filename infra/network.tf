@@ -31,3 +31,17 @@ resource "google_compute_firewall" "runner_to_backend" {
     ports    = [tostring(var.backend_port)]
   }
 }
+
+resource "google_compute_firewall" "iap_ssh" {
+  name      = "${local.name}-iap-ssh"
+  network   = google_compute_network.main.name
+  direction = "INGRESS"
+
+  source_ranges           = ["35.235.240.0/20"]
+  target_service_accounts = [google_service_account.backend.email]
+
+  allow {
+    protocol = "tcp"
+    ports    = ["22"]
+  }
+}

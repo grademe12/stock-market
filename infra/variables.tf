@@ -63,3 +63,25 @@ variable "cloud_sql_tier" {
   type        = string
   default     = "db-f1-micro"
 }
+
+variable "cloud_sql_user" {
+  description = "Application database user created in Cloud SQL."
+  type        = string
+  default     = "stock_market"
+}
+
+variable "cloud_sql_password" {
+  description = "Password for the Cloud SQL application user. Store only in terraform.tfvars."
+  type        = string
+  sensitive   = true
+}
+
+variable "github_repository" {
+  description = "GitHub repository allowed to deploy through Workload Identity Federation, for example grademe12/stock-market."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", var.github_repository))
+    error_message = "github_repository must be in owner/name form."
+  }
+}

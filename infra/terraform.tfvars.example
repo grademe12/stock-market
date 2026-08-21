@@ -1,5 +1,7 @@
 project_id         = "stock-market-505109"
 runner_source_cidr = "203.0.113.10/32"
+github_repository  = "grademe12/stock-market"
+cloud_sql_password = "replace-with-a-private-database-password"
 
 # Optional overrides
 # region          = "asia-northeast3"

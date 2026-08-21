@@ -1,0 +1,81 @@
+name: Deploy backend
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [infra, main]
+    paths:
+      - backend/**
+      - .github/workflows/deploy-backend.yml
+      - infra/scripts/remote-deploy.sh
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run backend tests
+        run: make backend-setup backend-test
+
+  deploy:
+    needs: test
+    if: github.event.repository.fork == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Set image names
+        run: |
+          project="${{ vars.GCP_PROJECT_ID }}"
+          region="${{ vars.GCP_REGION }}"
+          repository="${{ vars.ARTIFACT_REGISTRY_REPOSITORY }}"
+          image="${region}-docker.pkg.dev/${project}/${repository}/backend"
+          echo "REGISTRY_HOST=${region}-docker.pkg.dev" >> "$GITHUB_ENV"
+          echo "IMAGE=${image}:${GITHUB_SHA}" >> "$GITHUB_ENV"
+
+      - name: Build and push backend image
+        run: |
+          gcloud auth configure-docker "${REGISTRY_HOST}" --quiet
+          docker build -f backend/Dockerfile -t "${IMAGE}" .
+          docker push "${IMAGE}"
+
+      - name: Deploy image to the backend VM
+        env:
+          GCE_INSTANCE: ${{ vars.GCE_INSTANCE }}
+          GCE_ZONE: ${{ vars.GCE_ZONE }}
+          SQL_CONNECTION: ${{ vars.CLOUD_SQL_CONNECTION_NAME }}
+        run: |
+          token_file="$(mktemp)"
+          gcloud auth print-access-token > "${token_file}"
+          gcloud compute scp \
+            --quiet \
+            --tunnel-through-iap \
+            --zone "${GCE_ZONE}" \
+            infra/scripts/remote-deploy.sh \
+            "${GCE_INSTANCE}:/tmp/remote-deploy.sh"
+          gcloud compute scp \
+            --quiet \
+            --tunnel-through-iap \
+            --zone "${GCE_ZONE}" \
+            "${token_file}" \
+            "${GCE_INSTANCE}:/tmp/gar.token"
+          gcloud compute ssh "${GCE_INSTANCE}" \
+            --quiet \
+            --tunnel-through-iap \
+            --zone "${GCE_ZONE}" \
+            --command "chmod 700 /tmp/remote-deploy.sh /tmp/gar.token && sudo bash /tmp/remote-deploy.sh '${IMAGE}' '${REGISTRY_HOST}' '${SQL_CONNECTION}' /tmp/gar.token; status=\$?; rm -f /tmp/gar.token; exit \$status"
+          rm -f "${token_file}"

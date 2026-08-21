@@ -31,3 +31,9 @@ resource "google_sql_database" "application" {
   name     = "stock_market"
   instance = google_sql_database_instance.postgres.name
 }
+
+resource "google_sql_user" "application" {
+  name     = var.cloud_sql_user
+  instance = google_sql_database_instance.postgres.name
+  password = var.cloud_sql_password
+}
