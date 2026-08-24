@@ -129,20 +129,24 @@ class EventCoordinator:
             return
 
         run = self._runs[event_id]
-        if submitted:
-            self._reactions_submitted += 1
-            run.submitted += 1
-            scheduled_ms = tick * self._tick_interval_ms
-            lag = max(0, self.elapsed_ms() - scheduled_ms)
-            self._scheduler_lag_max_ms = max(self._scheduler_lag_max_ms, lag)
-            if not run.first_reaction_logged:
-                run.first_reaction_logged = True
-                logging.info(
-                    "event=news_first_reaction event_id=%s user_id=%s tick=%s",
-                    event_id,
-                    intent.user_id,
-                    tick,
-                )
+        if not submitted:
+            self._record_drops(event_id, 1)
+            self._maybe_complete(event_id)
+            return
+
+        self._reactions_submitted += 1
+        run.submitted += 1
+        scheduled_ms = tick * self._tick_interval_ms
+        lag = max(0, self.elapsed_ms() - scheduled_ms)
+        self._scheduler_lag_max_ms = max(self._scheduler_lag_max_ms, lag)
+        if not run.first_reaction_logged:
+            run.first_reaction_logged = True
+            logging.info(
+                "event=news_first_reaction event_id=%s user_id=%s tick=%s",
+                event_id,
+                intent.user_id,
+                tick,
+            )
         self._maybe_complete(event_id)
 
     def status(self) -> CoordinatorStatus:
@@ -169,6 +173,7 @@ class EventCoordinator:
         candidates = tuple(
             trader.reaction_candidate()
             for trader in self._traders.values()
+            if trader.remaining_reaction_orders == 0
         )
         plan = self._planner.plan_once(event, candidates)
         if plan is None:

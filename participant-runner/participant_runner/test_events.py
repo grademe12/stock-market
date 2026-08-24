@@ -2,6 +2,7 @@ from unittest import TestCase
 
 from exchange.participants import EventPreset, EventReactiveTrader, NewsShockEvent, TraderSettings
 
+from participant_runner.client import BackendApiError
 from participant_runner.coordinator import EventCoordinator, FakeClock
 from participant_runner.runner import ParticipantRunner
 from participant_runner.test_runner import FakeBackendClient, StaticParticipant, buy_intent
@@ -146,3 +147,76 @@ class EventCoordinatorRunnerTests(TestCase):
 
         self.assertEqual(status.orders_submitted_total, 1)
         self.assertIn("event coordinator failed", "\n".join(logs.output))
+
+    def test_failed_reaction_submission_is_counted_as_dropped(self) -> None:
+        class FailingOrderClient(FakeBackendClient):
+            def submit_order(self, intent):
+                raise BackendApiError(503, "unavailable")
+
+        client = FailingOrderClient()
+        clock = FakeClock()
+        event_trader = EventReactiveTrader(event_settings())
+        coordinator = EventCoordinator(
+            (shock_event(starts_after_ms=0, preset=EventPreset.MARKET_PANIC),),
+            (event_trader,),
+            tick_interval_ms=100,
+            clock=clock,
+        )
+        runner = ParticipantRunner(client, (event_trader,), coordinator=coordinator)
+
+        for _ in range(100):
+            clock.advance(100)
+            status = runner.tick_once()
+            if event_trader.remaining_reaction_orders == 0:
+                break
+
+        self.assertGreater(status.reactions_planned_total, 0)
+        self.assertEqual(status.reactions_submitted_total, 0)
+        self.assertEqual(status.request_failures_total, status.reactions_planned_total)
+        self.assertEqual(status.reactions_dropped_total, status.reactions_planned_total)
+
+    def test_overlapping_events_do_not_replace_an_active_reaction_plan(self) -> None:
+        clock = FakeClock()
+        event_traders = tuple(
+            EventReactiveTrader(event_settings(f"event_reactive-{index}"))
+            for index in range(1, 11)
+        )
+        coordinator = EventCoordinator(
+            (
+                shock_event(
+                    event_id="a-panic",
+                    starts_after_ms=0,
+                    preset=EventPreset.MARKET_PANIC,
+                    seed=1,
+                ),
+                shock_event(
+                    event_id="b-minor",
+                    starts_after_ms=100,
+                    preset=EventPreset.MINOR_NEWS,
+                    seed=2,
+                ),
+            ),
+            event_traders,
+            tick_interval_ms=100,
+            clock=clock,
+        )
+
+        coordinator.before_tick(1)
+        active_before_overlap = {
+            trader.user_id: trader.remaining_reaction_orders
+            for trader in event_traders
+            if trader.remaining_reaction_orders
+        }
+        clock.advance(100)
+        coordinator.before_tick(2)
+
+        status = coordinator.status()
+        self.assertTrue(active_before_overlap)
+        self.assertEqual(status.events_received_total, 2)
+        self.assertEqual(status.reactions_dropped_total, 0)
+        for user_id, remaining in active_before_overlap.items():
+            trader = next(
+                trader for trader in event_traders if trader.user_id == user_id
+            )
+            self.assertEqual(trader.remaining_reaction_orders, remaining)
+            self.assertEqual(coordinator._trader_event[user_id], "a-panic")
