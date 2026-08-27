@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgres:17-alpine
+    restart: unless-stopped
     env_file:
       - ${POSTGRES_ENV_FILE:-./db/postgres.env}
     volumes:

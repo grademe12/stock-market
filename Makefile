@@ -33,8 +33,10 @@ TEST_DURATION ?= 30s
 SCENARIO_PATH ?=
 LOADTEST_ARTIFACTS_DIR ?= .artifacts/loadtest
 TRADE_DATE ?=
+BACKUP_FILE ?=
+DB_TAILSCALE_COMPOSE ?= docker compose -f compose.yaml -f db/compose.tailscale.yaml
 
-.PHONY: backend-setup backend-migrate backend-test backend-run participant-runner-test db-up db-status db-migrate import-krx-top100 container-build container-backend-up container-down demo-up demo-seed demo-runner-up demo-logs demo-down load-backend-up load-backend-stats load-steady test run
+.PHONY: backend-setup backend-migrate backend-test backend-run participant-runner-test db-up db-tailscale-up db-status db-health db-backup db-restore db-migrate import-krx-top100 container-build container-backend-up container-down demo-up demo-seed demo-runner-up demo-logs demo-down load-backend-up load-backend-stats load-steady test run
 backend-setup: ## Create backend virtualenv and install dependencies
 	python3 -m venv $(BACKEND_DIR)/.venv
 	$(BACKEND_PYTHON) -m pip install --upgrade pip
@@ -55,8 +57,24 @@ participant-runner-test: ## Run external participant runner tests
 db-up: ## Start the PostgreSQL container
 	docker compose up -d postgres
 
+db-tailscale-up: ## Start PostgreSQL bound to this machine's Tailscale IPv4
+	@test -n "$$POSTGRES_BIND_ADDRESS" || { echo "export POSTGRES_BIND_ADDRESS=$$(tailscale ip -4)"; exit 1; }
+	@test -f db/config/postgresql.conf || { echo "copy db/config/postgresql.conf.example first"; exit 1; }
+	@test -f db/config/pg_hba.conf || { echo "copy and edit db/config/pg_hba.conf.example first"; exit 1; }
+	$(DB_TAILSCALE_COMPOSE) up -d postgres
+
 db-status: ## Show PostgreSQL container status
 	docker compose ps postgres
+
+db-health: ## Verify PostgreSQL readiness and a simple query
+	bash db/scripts/healthcheck.sh
+
+db-backup: ## Save a timestamped PostgreSQL dump under db/backups
+	bash db/scripts/backup.sh
+
+db-restore: ## Restore BACKUP_FILE after explicit RESTORE_CONFIRM
+	@test -n "$(BACKUP_FILE)" || { echo "set BACKUP_FILE=db/backups/<file>.dump"; exit 1; }
+	bash db/scripts/restore.sh "$(BACKUP_FILE)"
 
 db-migrate: ## Apply Django migrations to PostgreSQL
 	docker compose run --rm --entrypoint python backend manage.py migrate

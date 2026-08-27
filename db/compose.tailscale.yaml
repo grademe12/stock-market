@@ -1,0 +1,13 @@
+services:
+  postgres:
+    ports:
+      - "${POSTGRES_BIND_ADDRESS:?set POSTGRES_BIND_ADDRESS to the local Tailscale IPv4}:5432:5432"
+    volumes:
+      - ./db/config/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./db/config/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    command:
+      - postgres
+      - -c
+      - config_file=/etc/postgresql/postgresql.conf
+      - -c
+      - hba_file=/etc/postgresql/pg_hba.conf
