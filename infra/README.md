@@ -2,6 +2,9 @@
 
 Infrastructure and a single-VM backend deploy for the in-memory matcher.
 
+첫 배포 전 필수 보완 항목과 집 미니 PC PostgreSQL 대안은
+[GCP_DEPLOYMENT_READINESS.md](../docs/GCP_DEPLOYMENT_READINESS.md)를 먼저 확인한다.
+
 ```text
 GitHub Actions
   | OIDC / Workload Identity

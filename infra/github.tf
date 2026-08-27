@@ -18,6 +18,12 @@ resource "google_project_iam_member" "github" {
   member  = "serviceAccount:${google_service_account.github.email}"
 }
 
+resource "google_service_account_iam_member" "github_backend_service_account_user" {
+  service_account_id = google_service_account.backend.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${google_service_account.github.email}"
+}
+
 resource "google_iam_workload_identity_pool" "github" {
   workload_identity_pool_id = "${local.name}-github"
   display_name              = "GitHub Actions"
