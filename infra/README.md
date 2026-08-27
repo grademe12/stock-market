@@ -1,134 +1,168 @@
 # GCP infrastructure
 
-Infrastructure and a single-VM backend deploy for the in-memory matcher.
-
-첫 배포 전 필수 보완 항목과 집 미니 PC PostgreSQL 대안은
-[GCP_DEPLOYMENT_READINESS.md](../docs/GCP_DEPLOYMENT_READINESS.md)를 먼저 확인한다.
+필요할 때만 실행하는 단일 GCE backend와 로컬 PostgreSQL을 Tailscale로 연결한다.
+Cloud SQL, 공인 backend 포트, JSON 서비스 계정 키는 사용하지 않는다.
 
 ```text
-GitHub Actions
-  | OIDC / Workload Identity
-  | push image to Artifact Registry
-  | IAP SSH
-  v
+Local machine
+  - PostgreSQL 17
+  - participant-runner
+       | Tailscale ACL
+       v
 Compute Engine VM
-  - Cloud SQL Auth Proxy container
+  - custom image: Docker + Tailscale + gcloud
   - Django backend container (Gunicorn worker 1)
-        |
-        v
-Cloud SQL for PostgreSQL
 
-Local participant runners
-  | runner_source_cidr -> TCP 8000
-  v
-same VM
+GitHub Actions
+  - OIDC / Workload Identity
+  - Artifact Registry push
+  - IAP SSH deploy
 ```
 
-Terraform creates:
+Terraform이 생성하는 항목:
 
-- one custom VPC and regional subnet;
-- one static external IP and a backend firewall rule limited to `runner_source_cidr`;
-- IAP SSH from GitHub Actions (`35.235.240.0/20`);
-- one Compute Engine VM;
-- one Artifact Registry Docker repository;
-- one public-IP Cloud SQL PostgreSQL instance with no authorized network;
-- one application database user;
-- a VM service account (Cloud SQL client, Artifact Registry reader, telemetry);
-- a GitHub Actions service account plus Workload Identity Federation.
+- custom VPC와 subnet
+- outbound 전용 ephemeral external IP를 가진 GCE VM
+- GitHub Actions용 IAP SSH 방화벽
+- Artifact Registry
+- Tailscale, PostgreSQL, Django용 Secret Manager secret 컨테이너
+- 최소 runtime 권한의 VM service account
+- GitHub Actions service account와 branch 제한 Workload Identity Federation
 
-The development database uses the Cloud SQL `ENTERPRISE` edition explicitly so
-the shared-core `db-f1-micro` tier remains valid with PostgreSQL 17.
+DB 데이터와 PostgreSQL 프로세스는 로컬 머신에 유지한다. VM의 `8000`과
+로컬 DB의 `5432`는 Tailscale 네트워크에서만 접근한다.
 
-Terraform state is stored in the versioned GCS bucket
-`stock-market-505109-terraform-state` under the `infra/dev` prefix.
+## 1. Custom image 준비
 
-Cloud SQL Auth Proxy is not a Terraform resource. GitHub Actions starts it as a
-container on the VM. The proxy uses the VM service account, so no JSON key is
-required. A separate monitoring VM is not created.
+Debian 12 임시 builder VM에서 저장소의 스크립트를 실행한다.
 
-## Validate and apply
+```bash
+sudo bash infra/scripts/prepare-base-image.sh
+sudo poweroff
+```
+
+builder VM이 정지된 뒤 boot disk로 이미지를 만든다.
+
+```bash
+gcloud compute images create stock-market-base-20260827 \
+  --project stock-market-505109 \
+  --source-disk stock-market-image-builder \
+  --source-disk-zone asia-northeast3-a \
+  --family stock-market-base \
+  --storage-location asia
+```
+
+이미지에는 Docker, Tailscale client, Google Cloud CLI만 포함한다.
+Tailscale의 `/var/lib/tailscale` 상태와 모든 secret은 이미지에 포함하지 않는다.
+
+## 2. Terraform backend와 입력값
+
+환경별 state prefix를 명시적으로 분리한다.
 
 ```bash
 cd infra
+cp backend.dev.hcl.example backend.dev.hcl
 cp terraform.tfvars.example terraform.tfvars
-# Set runner_source_cidr, github_repository, and cloud_sql_password.
-terraform init
-terraform fmt -check
+terraform init -backend-config=backend.dev.hcl
+terraform fmt -check -recursive
 terraform validate
-terraform plan
-terraform apply
-terraform output github_actions_variables
 ```
 
-The Cloud SQL instance has Terraform deletion protection enabled.
+`terraform.tfvars`에서 다음 값을 실제 환경에 맞게 변경한다.
 
-## Values you must set
+- `project_id`
+- `github_repository`
+- `postgres_host`: 로컬 DB 머신의 Tailscale IP 또는 MagicDNS
+- `django_allowed_hosts`: backend의 Tailscale hostname과 MagicDNS
+- 필요한 경우 custom image project/family와 Tailscale hostname/tag
 
-These are not in Git. Terraform and GitHub Actions only read them from local
-files or GitHub repository settings.
+## 3. Secret 생성과 값 등록
 
-### 1. `infra/terraform.tfvars`
-
-| Name | Meaning |
-|---|---|
-| `project_id` | GCP project |
-| `runner_source_cidr` | Public IP of the machine that will run `participant-runner`, as `x.x.x.x/32` |
-| `github_repository` | `owner/name` of this GitHub repo, used as the OIDC allowlist |
-| `cloud_sql_password` | Password for the `stock_market` Cloud SQL user |
-
-### 2. GitHub repository variables
-
-Settings → Secrets and variables → Actions → **Variables** (not Secrets).
-Copy the map from `terraform output github_actions_variables`.
-
-| Variable | Source |
-|---|---|
-| `GCP_PROJECT_ID` | `project_id` |
-| `GCP_WORKLOAD_IDENTITY_PROVIDER` | WIF provider resource name |
-| `GCP_DEPLOY_SERVICE_ACCOUNT` | GitHub Actions service account email |
-| `GCP_REGION` | region, default `asia-northeast3` |
-| `ARTIFACT_REGISTRY_REPOSITORY` | Artifact Registry repository id |
-| `GCE_INSTANCE` | VM name |
-| `GCE_ZONE` | zone, default `asia-northeast3-a` |
-| `CLOUD_SQL_CONNECTION_NAME` | `project:region:instance` |
-
-No GCP JSON key is stored in GitHub. The workflow uses OIDC (`id-token: write`).
-
-### 3. Env file on the VM
-
-Create this **once** after `terraform apply`, before the first deploy. It stays
-on the VM and is not in GitHub Actions.
+Secret 값은 Terraform에 전달하지 않는다. 먼저 secret 컨테이너와 IAM을 만든다.
 
 ```bash
-gcloud compute ssh stock-market-dev-backend --zone asia-northeast3-a --tunnel-through-iap
-sudo mkdir -p /etc/stock-market
-sudo chmod 700 /etc/stock-market
-sudo cp /dev/stdin /etc/stock-market/backend.env
+terraform apply \
+  -target=google_secret_manager_secret.runtime \
+  -target=google_secret_manager_secret_iam_member.backend_accessor
+terraform output runtime_secret_names
 ```
 
-Use `infra/backend.env.example` as the template.
+각 값은 로컬 파일이나 stdin을 통해 직접 Secret Manager에 등록한다.
 
-| Name | Meaning |
-|---|---|
-| `POSTGRES_PASSWORD` | Same value as `cloud_sql_password` |
-| `DJANGO_SECRET_KEY` | Long random string, not the Django default |
-| `DJANGO_ALLOWED_HOSTS` | VM external IP from `terraform output backend_external_ip` |
-| `DJANGO_DEBUG` | `0` on GCP |
-| `POSTGRES_HOST` | `127.0.0.1` (the Auth Proxy on the VM) |
+```bash
+printf '%s' "$TAILSCALE_AUTH_KEY" | \
+  gcloud secrets versions add stock-market-dev-tailscale-auth-key --data-file=-
+printf '%s' "$POSTGRES_PASSWORD" | \
+  gcloud secrets versions add stock-market-dev-postgres-password --data-file=-
+python3 -c 'import secrets; print(secrets.token_urlsafe(64), end="")' | \
+  gcloud secrets versions add stock-market-dev-django-secret-key --data-file=-
+```
 
-`DJANGO_SECRET_KEY` is only on the VM. Do not put it in GitHub variables.
+Tailscale key는 `tag:stock-market-backend`를 광고할 수 있어야 한다. VM을 재생성할
+때 key가 만료됐거나 일회용으로 소비됐다면 secret에 새 version을 등록한다.
 
-## Deploy
+이후 전체 plan과 apply를 실행한다.
 
-After the three setup steps:
+```bash
+terraform plan
+terraform apply
+```
+
+VM startup script가 다음 작업을 멱등하게 수행한다.
+
+1. Docker와 Tailscale service 시작
+2. 미인증 VM만 Tailscale 등록
+3. PostgreSQL 및 Django secret 조회
+4. root 전용 `/etc/stock-market/backend.env` 생성
+
+bootstrap 로그는 다음 명령으로 확인한다.
+
+```bash
+gcloud compute ssh stock-market-dev-backend \
+  --zone asia-northeast3-a \
+  --tunnel-through-iap \
+  --command 'sudo journalctl -u google-startup-scripts.service'
+```
+
+## 4. 로컬 PostgreSQL과 Tailscale ACL
+
+로컬 PostgreSQL은 인터넷에 포트 포워딩하지 않는다.
+
+- `listen_addresses`: localhost와 로컬 머신의 Tailscale 주소
+- `pg_hba.conf`: backend VM의 Tailscale IP에서 오는 application user만 허용
+- 인증: `scram-sha-256`
+- 재부팅 후 PostgreSQL 자동 시작
+- 일일 backup과 주기적인 restore 검증
+
+Tailnet 정책은 최소한 다음 흐름만 허용한다.
 
 ```text
-GitHub → Actions → Deploy backend → Run workflow
+local participant-runner -> stock-market-gce:8000
+tag:stock-market-backend -> local-db:5432
 ```
 
-Pushes to `infra` or `main` that change `backend/` also trigger the workflow.
-It runs backend tests, pushes an image tagged with the commit SHA, then SSHs
-through IAP to restart the backend container. Matcher replica remains 1.
+## 5. GitHub Actions 변수와 배포
 
-The first SSH from your laptop to the VM may still need OS Login / IAP
-permissions for your user, separate from the GitHub service account.
+`terraform output github_actions_variables` 결과를 GitHub Actions Variables에 등록한다.
+
+- `GCP_PROJECT_ID`
+- `GCP_WORKLOAD_IDENTITY_PROVIDER`
+- `GCP_DEPLOY_SERVICE_ACCOUNT`
+- `GCP_REGION`
+- `ARTIFACT_REGISTRY_REPOSITORY`
+- `GCE_INSTANCE`
+- `GCE_ZONE`
+
+workflow는 `main`에서만 배포 토큰을 받을 수 있다. backend·runner 테스트와 Terraform
+검증 후 이미지를 push하고 IAP SSH로 배포한다. VM은 자신의 service account로
+Artifact Registry에 로그인한다.
+
+배포는 기존 컨테이너를 `stock-market-backend-previous`로 보존한다. 새 컨테이너의
+`/api/v1/ready/`가 DB 연결까지 확인한 후에만 이전 컨테이너를 삭제하며, 실패하면
+이전 컨테이너를 복구한다. 메모리 호가창 특성상 배포 중 주문 상태는 유지되지 않는다.
+
+runner의 endpoint:
+
+```bash
+BACKEND_BASE_URL=http://stock-market-gce:8000
+```

@@ -68,6 +68,9 @@ if DATABASE_ENGINE == "postgresql":
             "PORT": os.getenv("POSTGRES_PORT", "5432"),
             "CONN_MAX_AGE": 60,
             "CONN_HEALTH_CHECKS": True,
+            "OPTIONS": {
+                "connect_timeout": int(os.getenv("POSTGRES_CONNECT_TIMEOUT_SECONDS", "3")),
+            },
         },
     }
 elif DATABASE_ENGINE == "sqlite":

@@ -2,6 +2,7 @@ import logging
 from uuid import UUID
 
 from django.conf import settings
+from django.db import DatabaseError, connection
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.decorators import api_view
@@ -26,6 +27,21 @@ order_book = OrderBook(symbol=SIMULATION_SYMBOL)
 def health(request):
     """Return the smallest possible DRF endpoint for local verification."""
     return Response({"status": "ok"})
+
+
+@api_view(["GET"])
+def readiness(request):
+    """Report whether the process can reach its configured database."""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+    except DatabaseError:
+        return Response(
+            {"status": "not_ready", "database": "unavailable"},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    return Response({"status": "ready", "database": "ok"})
 
 
 @api_view(["POST"])

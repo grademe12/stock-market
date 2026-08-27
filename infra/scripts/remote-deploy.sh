@@ -3,68 +3,94 @@ set -euo pipefail
 
 IMAGE="${1:?image}"
 REGISTRY_HOST="${2:?registry host}"
-SQL_CONNECTION="${3:?cloud sql connection name}"
-ACCESS_TOKEN_FILE="${4:?access token file}"
 
 ENV_FILE=/etc/stock-market/backend.env
-PROXY_IMAGE=gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.15.2
+CURRENT_CONTAINER=stock-market-backend
+PREVIOUS_CONTAINER=stock-market-backend-previous
 
 sudo mkdir -p /etc/stock-market
 sudo chmod 700 /etc/stock-market
 
 if [[ ! -f "${ENV_FILE}" ]]; then
-  echo "missing ${ENV_FILE}; copy infra/backend.env.example on the VM first" >&2
+  echo "missing ${ENV_FILE}; VM bootstrap has not completed" >&2
   exit 1
 fi
 
-if ! command -v docker >/dev/null 2>&1; then
-  sudo apt-get update
-  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io
-  sudo systemctl enable --now docker
+for command_name in docker gcloud tailscale; do
+  if ! command -v "${command_name}" >/dev/null 2>&1; then
+    echo "custom image contract violation: ${command_name} is not installed" >&2
+    exit 1
+  fi
+done
+
+if ! tailscale ip -4 >/dev/null 2>&1; then
+  echo "Tailscale is not connected" >&2
+  exit 1
 fi
 
-sudo docker login -u oauth2accesstoken --password-stdin "${REGISTRY_HOST}" < "${ACCESS_TOKEN_FILE}"
+registry_token="$(gcloud auth print-access-token)"
+printf '%s' "${registry_token}" \
+  | sudo docker login -u oauth2accesstoken --password-stdin "${REGISTRY_HOST}"
+unset registry_token
 sudo docker pull "${IMAGE}"
 
-if ! sudo docker container inspect cloud-sql-proxy >/dev/null 2>&1 \
-  || [[ "$(sudo docker inspect -f '{{.State.Running}}' cloud-sql-proxy)" != "true" ]]; then
-  sudo docker rm -f cloud-sql-proxy >/dev/null 2>&1 || true
-  sudo docker run -d \
-    --name cloud-sql-proxy \
-    --network host \
-    --restart unless-stopped \
-    "${PROXY_IMAGE}" \
-    "${SQL_CONNECTION}" --address 127.0.0.1 --port 5432
-fi
-
-sudo docker rm -f stock-market-backend >/dev/null 2>&1 || true
-sudo docker run -d \
-  --name stock-market-backend \
-  --network host \
-  --restart unless-stopped \
-  --env-file "${ENV_FILE}" \
-  "${IMAGE}"
-
-if python3 - <<'PY'
+backend_is_ready() {
+  python3 - <<'PY'
 from urllib.request import urlopen
 from time import sleep
 import sys
 
 for _ in range(20):
     try:
-        with urlopen("http://127.0.0.1:8000/api/v1/health/", timeout=2) as response:
+        with urlopen("http://127.0.0.1:8000/api/v1/ready/", timeout=2) as response:
             if response.status == 200:
-                print("backend is healthy")
+                print("backend is ready")
                 sys.exit(0)
     except Exception:
         sleep(2)
-print("backend health check failed", file=sys.stderr)
+print("backend readiness check failed", file=sys.stderr)
 sys.exit(1)
 PY
-then
+}
+
+restore_previous() {
+  sudo docker rm -f "${CURRENT_CONTAINER}" >/dev/null 2>&1 || true
+  if sudo docker container inspect "${PREVIOUS_CONTAINER}" >/dev/null 2>&1; then
+    sudo docker rename "${PREVIOUS_CONTAINER}" "${CURRENT_CONTAINER}"
+    sudo docker start "${CURRENT_CONTAINER}" >/dev/null
+    echo "previous backend container restored" >&2
+  fi
+}
+
+# Recover a previous interrupted deployment before starting another one.
+if ! sudo docker container inspect "${CURRENT_CONTAINER}" >/dev/null 2>&1 \
+  && sudo docker container inspect "${PREVIOUS_CONTAINER}" >/dev/null 2>&1; then
+  sudo docker rename "${PREVIOUS_CONTAINER}" "${CURRENT_CONTAINER}"
+  sudo docker start "${CURRENT_CONTAINER}" >/dev/null
+fi
+
+if sudo docker container inspect "${CURRENT_CONTAINER}" >/dev/null 2>&1; then
+  sudo docker rm -f "${PREVIOUS_CONTAINER}" >/dev/null 2>&1 || true
+  sudo docker stop --time 30 "${CURRENT_CONTAINER}" >/dev/null
+  sudo docker rename "${CURRENT_CONTAINER}" "${PREVIOUS_CONTAINER}"
+fi
+
+if ! sudo docker run -d \
+  --name "${CURRENT_CONTAINER}" \
+  --network host \
+  --restart unless-stopped \
+  --env-file "${ENV_FILE}" \
+  "${IMAGE}"; then
+  restore_previous
+  exit 1
+fi
+
+if backend_is_ready; then
+  sudo docker rm -f "${PREVIOUS_CONTAINER}" >/dev/null 2>&1 || true
   exit 0
 fi
 
 echo "backend container logs:" >&2
-sudo docker logs stock-market-backend | tail -n 80 >&2
+sudo docker logs --tail 80 "${CURRENT_CONTAINER}" >&2 || true
+restore_previous
 exit 1

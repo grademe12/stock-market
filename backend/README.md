@@ -28,7 +28,11 @@ docker compose up --build backend
 # 또는 make container-backend-up
 ```
 
-`http://127.0.0.1:8000/api/v1/health/`가 준비 상태 확인 endpoint다. Compose backend는 별도 PostgreSQL 컨테이너를 사용하며 데이터는 named volume `postgres-data`에 보존된다. 컨테이너를 내리려면 `make container-down`을 사용한다. volume까지 지우려면 명시적으로 `docker compose down --volumes`를 실행해야 한다.
+`http://127.0.0.1:8000/api/v1/health/`는 프로세스 liveness,
+`http://127.0.0.1:8000/api/v1/ready/`는 데이터베이스 연결을 포함한 readiness
+endpoint다. Compose backend는 별도 PostgreSQL 컨테이너를 사용하며 데이터는 named
+volume `postgres-data`에 보존된다. 컨테이너를 내리려면 `make container-down`을
+사용한다. volume까지 지우려면 명시적으로 `docker compose down --volumes`를 실행해야 한다.
 
 Compose 설정은 backend 컨테이너를 CPU 1코어(`cpus: "1.0"`)와 메모리 4GiB(`memory: 4G`)로 제한한다. 이는 이미지 자체가 아니라 로컬 Compose 실행 정책이다.
 
@@ -71,7 +75,8 @@ make demo-seed TRADER_STRATEGY=event_reactive TRADER_COUNT=50
 | `POST /api/v1/orders/` | 지정가 주문 제출·체결 결과 조회 |
 | `DELETE /api/v1/orders/{order_id}/` | 미체결 잔량 주문 취소 |
 | `GET /api/v1/books/005930/` | 가격별 호가 잔량 조회 |
-| `GET /api/v1/health/` | 서버 상태 확인 |
+| `GET /api/v1/health/` | 프로세스 liveness 확인 |
+| `GET /api/v1/ready/` | 데이터베이스 연결 readiness 확인 |
 | `GET` / `POST /api/v1/traders/` | 트레이더 환경설정 목록 조회 / 생성 |
 | `GET` / `PATCH` / `DELETE /api/v1/traders/{trader_id}/` | 개별 트레이더 환경설정 조회 / 수정 / 삭제 |
 

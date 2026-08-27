@@ -3,15 +3,20 @@ name: Deploy backend
 on:
   workflow_dispatch:
   push:
-    branches: [infra, main]
+    branches: [main]
     paths:
       - backend/**
+      - participant-runner/**
       - .github/workflows/deploy-backend.yml
       - infra/scripts/remote-deploy.sh
 
 permissions:
   contents: read
   id-token: write
+
+concurrency:
+  group: deploy-backend-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   test:
@@ -22,11 +27,26 @@ jobs:
         with:
           python-version: "3.12"
       - name: Run backend tests
-        run: make backend-setup backend-test
+        run: make backend-setup backend-test participant-runner-test
+
+  validate-infra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: Validate Terraform
+        working-directory: infra
+        run: |
+          terraform init -backend=false
+          terraform fmt -check -recursive
+          terraform validate
 
   deploy:
-    needs: test
-    if: github.event.repository.fork == false && vars.GCP_WORKLOAD_IDENTITY_PROVIDER != ''
+    needs: [test, validate-infra]
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      github.event.repository.fork == false &&
+      vars.GCP_WORKLOAD_IDENTITY_PROVIDER != ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -57,25 +77,15 @@ jobs:
         env:
           GCE_INSTANCE: ${{ vars.GCE_INSTANCE }}
           GCE_ZONE: ${{ vars.GCE_ZONE }}
-          SQL_CONNECTION: ${{ vars.CLOUD_SQL_CONNECTION_NAME }}
         run: |
-          token_file="$(mktemp)"
-          gcloud auth print-access-token > "${token_file}"
           gcloud compute scp \
             --quiet \
             --tunnel-through-iap \
             --zone "${GCE_ZONE}" \
             infra/scripts/remote-deploy.sh \
             "${GCE_INSTANCE}:/tmp/remote-deploy.sh"
-          gcloud compute scp \
-            --quiet \
-            --tunnel-through-iap \
-            --zone "${GCE_ZONE}" \
-            "${token_file}" \
-            "${GCE_INSTANCE}:/tmp/gar.token"
           gcloud compute ssh "${GCE_INSTANCE}" \
             --quiet \
             --tunnel-through-iap \
             --zone "${GCE_ZONE}" \
-            --command "chmod 700 /tmp/remote-deploy.sh /tmp/gar.token && sudo bash /tmp/remote-deploy.sh '${IMAGE}' '${REGISTRY_HOST}' '${SQL_CONNECTION}' /tmp/gar.token; status=\$?; rm -f /tmp/gar.token; exit \$status"
-          rm -f "${token_file}"
+            --command "chmod 700 /tmp/remote-deploy.sh && sudo bash /tmp/remote-deploy.sh '${IMAGE}' '${REGISTRY_HOST}'"

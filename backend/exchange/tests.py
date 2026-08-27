@@ -1,3 +1,6 @@
+from unittest.mock import patch
+
+from django.db import DatabaseError
 from rest_framework.test import APITestCase
 from django.urls import reverse
 from django.test import override_settings
@@ -14,6 +17,24 @@ class HealthEndpointTests(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"status": "ok"})
+
+
+class ReadinessEndpointTests(APITestCase):
+    def test_readiness_endpoint_checks_the_database(self):
+        response = self.client.get(reverse("readiness"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "ready", "database": "ok"})
+
+    def test_readiness_endpoint_rejects_an_unavailable_database(self):
+        with patch("exchange.views.connection.cursor", side_effect=DatabaseError("offline")):
+            response = self.client.get(reverse("readiness"))
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(
+            response.json(),
+            {"status": "not_ready", "database": "unavailable"},
+        )
 
 
 class OrderApiTests(APITestCase):

@@ -15,6 +15,7 @@ locals {
     "iap.googleapis.com",
     "logging.googleapis.com",
     "monitoring.googleapis.com",
-    "sqladmin.googleapis.com",
+    "oslogin.googleapis.com",
+    "secretmanager.googleapis.com",
   ])
 }

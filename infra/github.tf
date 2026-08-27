@@ -40,7 +40,11 @@ resource "google_iam_workload_identity_pool_provider" "github" {
     "google.subject"       = "assertion.sub"
     "attribute.repository" = "assertion.repository"
   }
-  attribute_condition = "assertion.repository == \"${var.github_repository}\""
+  attribute_condition = join(" && ", [
+    "assertion.repository == \"${var.github_repository}\"",
+    "assertion.ref == \"${var.github_deploy_ref}\"",
+    "assertion.job_workflow_ref.startsWith(\"${var.github_repository}/.github/workflows/deploy-backend.yml@\")",
+  ])
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"
   }
