@@ -31,24 +31,26 @@ variable "environment" {
   }
 }
 
-variable "runner_source_cidr" {
-  description = "Public IP CIDR of the local runner machine, for example 203.0.113.10/32."
+variable "backend_image_family" {
+  description = "Custom Compute Engine image family with Docker, Tailscale, and gcloud installed."
   type        = string
+  default     = "stock-market-base"
 
   validation {
-    condition     = can(cidrhost(var.runner_source_cidr, 0)) && endswith(var.runner_source_cidr, "/32")
-    error_message = "runner_source_cidr must be a single IPv4 address using /32."
+    condition     = length(trimspace(var.backend_image_family)) > 0
+    error_message = "backend_image_family must not be empty."
   }
 }
 
-variable "backend_port" {
-  description = "Backend port exposed only to runner_source_cidr."
-  type        = number
-  default     = 8000
+variable "backend_image_project" {
+  description = "Project containing the custom image family. Null uses project_id."
+  type        = string
+  default     = null
+  nullable    = true
 
   validation {
-    condition     = var.backend_port >= 1 && var.backend_port <= 65535
-    error_message = "backend_port must be between 1 and 65535."
+    condition     = var.backend_image_project == null || length(trimspace(var.backend_image_project)) > 0
+    error_message = "backend_image_project must be null or a non-empty project ID."
   }
 }
 
@@ -58,22 +60,69 @@ variable "vm_machine_type" {
   default     = "e2-medium"
 }
 
-variable "cloud_sql_tier" {
-  description = "Machine tier for the development Cloud SQL instance."
+variable "tailscale_hostname" {
+  description = "Stable Tailscale hostname assigned to the backend VM."
   type        = string
-  default     = "db-f1-micro"
+  default     = "stock-market-gce"
+
+  validation {
+    condition     = can(regex("^[a-z0-9][a-z0-9-]{0,62}$", var.tailscale_hostname))
+    error_message = "tailscale_hostname must be a lowercase DNS label."
+  }
 }
 
-variable "cloud_sql_user" {
-  description = "Application database user created in Cloud SQL."
+variable "tailscale_tags" {
+  description = "Comma-separated Tailscale tags advertised by the backend VM."
+  type        = string
+  default     = "tag:stock-market-backend"
+
+  validation {
+    condition     = startswith(var.tailscale_tags, "tag:")
+    error_message = "tailscale_tags must start with tag:."
+  }
+}
+
+variable "postgres_host" {
+  description = "Tailscale IP or MagicDNS name of the local PostgreSQL machine."
+  type        = string
+
+  validation {
+    condition     = length(trimspace(var.postgres_host)) > 0
+    error_message = "postgres_host must not be empty."
+  }
+}
+
+variable "postgres_port" {
+  description = "PostgreSQL port on the local Tailscale machine."
+  type        = number
+  default     = 5432
+
+  validation {
+    condition     = var.postgres_port >= 1 && var.postgres_port <= 65535
+    error_message = "postgres_port must be between 1 and 65535."
+  }
+}
+
+variable "postgres_database" {
+  description = "Application database on the local PostgreSQL machine."
   type        = string
   default     = "stock_market"
 }
 
-variable "cloud_sql_password" {
-  description = "Password for the Cloud SQL application user. Store only in terraform.tfvars."
+variable "postgres_user" {
+  description = "Application user on the local PostgreSQL machine."
   type        = string
-  sensitive   = true
+  default     = "stock_market"
+}
+
+variable "django_allowed_hosts" {
+  description = "Comma-separated Host header values accepted by Django over Tailscale."
+  type        = string
+
+  validation {
+    condition     = length(trimspace(var.django_allowed_hosts)) > 0
+    error_message = "django_allowed_hosts must not be empty."
+  }
 }
 
 variable "github_repository" {
@@ -83,5 +132,16 @@ variable "github_repository" {
   validation {
     condition     = can(regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", var.github_repository))
     error_message = "github_repository must be in owner/name form."
+  }
+}
+
+variable "github_deploy_ref" {
+  description = "Only this Git ref can exchange GitHub OIDC tokens for the deploy service account."
+  type        = string
+  default     = "refs/heads/main"
+
+  validation {
+    condition     = startswith(var.github_deploy_ref, "refs/heads/")
+    error_message = "github_deploy_ref must be a branch ref such as refs/heads/main."
   }
 }

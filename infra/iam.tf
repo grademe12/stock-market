@@ -7,7 +7,6 @@ resource "google_service_account" "backend" {
 resource "google_project_iam_member" "backend" {
   for_each = toset([
     "roles/artifactregistry.reader",
-    "roles/cloudsql.client",
     "roles/logging.logWriter",
     "roles/monitoring.metricWriter",
   ])

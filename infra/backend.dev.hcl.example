@@ -1,0 +1,2 @@
+bucket = "stock-market-505109-terraform-state"
+prefix = "infra/dev"

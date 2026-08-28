@@ -18,6 +18,12 @@ resource "google_project_iam_member" "github" {
   member  = "serviceAccount:${google_service_account.github.email}"
 }
 
+resource "google_service_account_iam_member" "github_backend_service_account_user" {
+  service_account_id = google_service_account.backend.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${google_service_account.github.email}"
+}
+
 resource "google_iam_workload_identity_pool" "github" {
   workload_identity_pool_id = "${local.name}-github"
   display_name              = "GitHub Actions"
@@ -34,7 +40,11 @@ resource "google_iam_workload_identity_pool_provider" "github" {
     "google.subject"       = "assertion.sub"
     "attribute.repository" = "assertion.repository"
   }
-  attribute_condition = "assertion.repository == \"${var.github_repository}\""
+  attribute_condition = join(" && ", [
+    "assertion.repository == \"${var.github_repository}\"",
+    "assertion.ref == \"${var.github_deploy_ref}\"",
+    "assertion.job_workflow_ref.startsWith(\"${var.github_repository}/.github/workflows/deploy-backend.yml@\")",
+  ])
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"
   }

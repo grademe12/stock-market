@@ -11,7 +11,8 @@
 ### 거래소 API와 매칭 엔진
 
 - Django와 Django REST Framework 기반의 HTTP API
-- 상태 확인 API: `GET /api/v1/health/`
+- 프로세스 liveness API: `GET /api/v1/health/`
+- 데이터베이스 readiness API: `GET /api/v1/ready/`
 - 주문 제출·취소 API와 호가창 조회 API
 - 개발용 단일 종목 `005930` 지원
 - 지정가 주문, 가격·시간 우선, 부분 체결, 주문 잔량 및 취소 처리

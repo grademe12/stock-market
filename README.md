@@ -14,6 +14,7 @@
 | [docs/NEWS_TRIGGERED_LOAD_SPIKE_PLAN.md](docs/NEWS_TRIGGERED_LOAD_SPIKE_PLAN.md) | 뉴스 발생을 모사한 트레이더 주문 spike 미확정 계획 |
 | [docs/DEMO_RUNBOOK.md](docs/DEMO_RUNBOOK.md) | 재현 가능한 backend·runner 실험 실행 절차 |
 | [docs/UBUNTU_SETUP.md](docs/UBUNTU_SETUP.md) | Ubuntu/WSL 1회 셋업 체크리스트 |
+| [docs/GCP_DEPLOYMENT_READINESS.md](docs/GCP_DEPLOYMENT_READINESS.md) | Tailscale 기반 GCE·로컬 PostgreSQL 배포 결정과 완료 조건 |
 
 ## 프로젝트 구조
 

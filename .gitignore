@@ -21,6 +21,10 @@ venv/
 !.env.example
 participant-runner/.env
 /db/postgres.env
+/db/config/postgresql.conf
+/db/config/pg_hba.conf
+/db/backups/*
+!/db/backups/.gitkeep
 
 # IDE
 .idea/

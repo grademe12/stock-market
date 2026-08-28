@@ -1,20 +1,19 @@
-output "backend_external_ip" {
-  description = "Static external IP used by the local participant runners."
-  value       = google_compute_address.backend.address
-}
-output "backend_url" {
-  description = "Backend URL allowed only from runner_source_cidr."
-  value       = "http://${google_compute_address.backend.address}:${var.backend_port}"
-}
-
-output "cloud_sql_connection_name" {
-  description = "Instance connection name passed to Cloud SQL Auth Proxy."
-  value       = google_sql_database_instance.postgres.connection_name
-}
-
 output "backend_service_account" {
-  description = "Service account used by the VM and Cloud SQL Auth Proxy."
+  description = "Service account used by the backend VM."
   value       = google_service_account.backend.email
+}
+
+output "runtime_secret_names" {
+  description = "Secret Manager names whose values must be added outside Terraform."
+  value = {
+    for key, secret in google_secret_manager_secret.runtime :
+    key => secret.secret_id
+  }
+}
+
+output "tailscale_backend_hostname" {
+  description = "Tailscale hostname used by the participant runner."
+  value       = var.tailscale_hostname
 }
 
 output "github_actions_variables" {
@@ -27,6 +26,5 @@ output "github_actions_variables" {
     ARTIFACT_REGISTRY_REPOSITORY   = google_artifact_registry_repository.backend.repository_id
     GCE_INSTANCE                   = google_compute_instance.backend.name
     GCE_ZONE                       = var.zone
-    CLOUD_SQL_CONNECTION_NAME      = google_sql_database_instance.postgres.connection_name
   }
 }
