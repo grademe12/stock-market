@@ -39,7 +39,42 @@ class OrderBookTests(SimpleTestCase):
         self.assertEqual(len(result.trades), 1)
         self.assertEqual(result.trades[0].price, 70_000)
         self.assertEqual(result.trades[0].quantity, 4)
+        self.assertIsNotNone(result.trades[0].executed_at.tzinfo)
         self.assertEqual(self.book.open_orders(OrderSide.SELL)[0].remaining_quantity, 6)
+
+    def test_recent_trades_are_newest_first_and_bounded(self) -> None:
+        book = OrderBook(symbol=self.symbol, recent_trade_capacity=2)
+
+        for price in (70_000, 70_100, 70_200):
+            book.submit(
+                self.order(
+                    user_id=f"seller-{price}",
+                    side=OrderSide.SELL,
+                    price=price,
+                    quantity=1,
+                )
+            )
+            book.submit(
+                self.order(
+                    user_id=f"buyer-{price}",
+                    side=OrderSide.BUY,
+                    price=price,
+                    quantity=1,
+                )
+            )
+
+        self.assertEqual([trade.price for trade in book.recent_trades(10)], [70_200, 70_100])
+
+    def test_non_crossing_order_does_not_create_recent_trade(self) -> None:
+        self.book.submit(
+            self.order(user_id="alice", side=OrderSide.BUY, price=70_000, quantity=3)
+        )
+
+        self.assertEqual(self.book.recent_trades(50), ())
+
+    def test_recent_trade_limit_must_be_positive(self) -> None:
+        with self.assertRaisesRegex(ValueError, "limit must be at least 1"):
+            self.book.recent_trades(0)
 
     def test_best_price_is_matched_before_an_older_worse_price(self) -> None:
         expensive_sell = self.order(user_id="alice", side=OrderSide.SELL, price=71_000, quantity=1)

@@ -1,3 +1,4 @@
+from collections import deque
 from dataclasses import replace
 from threading import RLock
 
@@ -22,13 +23,16 @@ class OrderBook:
     matching price is always the resting (maker) order's price.
     """
 
-    def __init__(self, symbol: str) -> None:
+    def __init__(self, symbol: str, *, recent_trade_capacity: int = 200) -> None:
         if not symbol.strip():
             raise ValueError("symbol must not be blank")
+        if recent_trade_capacity < 1:
+            raise ValueError("recent_trade_capacity must be at least 1")
 
         self.symbol = symbol
         self._bids: list[OpenOrder] = []
         self._asks: list[OpenOrder] = []
+        self._recent_trades: deque[Trade] = deque(maxlen=recent_trade_capacity)
         self._sequence = 0
         self._lock = RLock()
 
@@ -68,11 +72,21 @@ class OrderBook:
             if remaining_quantity:
                 self._rest(order, remaining_quantity)
 
+            self._recent_trades.extend(trades)
+
             return MatchResult(
                 order_id=order.order_id,
                 trades=tuple(trades),
                 remaining_quantity=remaining_quantity,
             )
+
+    def recent_trades(self, limit: int) -> tuple[Trade, ...]:
+        """Return the newest executions first from the bounded in-memory tape."""
+        if limit < 1:
+            raise ValueError("limit must be at least 1")
+
+        with self._lock:
+            return tuple(reversed(tuple(self._recent_trades)[-limit:]))
 
     def open_orders(self, side: OrderSide) -> tuple[OpenOrder, ...]:
         with self._lock:

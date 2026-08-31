@@ -3,6 +3,7 @@ from uuid import UUID
 
 from django.conf import settings
 from django.db import DatabaseError, connection
+from django.db.models import Max, Q
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.decorators import api_view
@@ -10,12 +11,15 @@ from rest_framework.exceptions import NotFound, PermissionDenied, ValidationErro
 from rest_framework.response import Response
 
 from exchange.orderbook import OrderBook, OrderNotFoundError
-from exchange.models import TraderProfile
+from exchange.models import MarketDaily, TraderProfile
 from exchange.serializers import (
     OrderRequestSerializer,
+    RecentTradeQuerySerializer,
+    SymbolQuerySerializer,
     TraderProfileSerializer,
     match_result_payload,
     snapshot_payload,
+    trade_payload,
 )
 
 SIMULATION_SYMBOL = "005930"
@@ -67,6 +71,62 @@ def book_detail(request, symbol: str):
         raise NotFound("symbol was not found")
 
     return Response(snapshot_payload(order_book.snapshot()))
+
+
+@api_view(["GET"])
+def recent_trade_list(request):
+    query = RecentTradeQuerySerializer(data=request.query_params)
+    query.is_valid(raise_exception=True)
+    symbol = query.validated_data["symbol"]
+    if symbol != SIMULATION_SYMBOL:
+        raise NotFound("symbol was not found")
+
+    trades = order_book.recent_trades(query.validated_data["limit"])
+    return Response(
+        {
+            "symbol": symbol,
+            "trades": [trade_payload(trade) for trade in trades],
+        }
+    )
+
+
+@api_view(["GET"])
+def symbol_list(request):
+    query = SymbolQuerySerializer(data=request.query_params)
+    query.is_valid(raise_exception=True)
+
+    latest_trade_date = MarketDaily.objects.aggregate(latest=Max("trade_date"))["latest"]
+    if latest_trade_date is None:
+        return Response({"trade_date": None, "results": []})
+
+    records = MarketDaily.objects.filter(trade_date=latest_trade_date).select_related("symbol")
+    search_term = query.validated_data["q"]
+    if search_term:
+        records = records.filter(
+            Q(symbol__ticker__icontains=search_term) | Q(symbol__name__icontains=search_term)
+        )
+
+    records = records.order_by("trading_value_rank", "symbol_id")[
+        : query.validated_data["limit"]
+    ]
+    return Response(
+        {
+            "trade_date": latest_trade_date.isoformat(),
+            "results": [
+                {
+                    "ticker": record.symbol_id,
+                    "name": record.symbol.name,
+                    "market": record.symbol.market,
+                    "close_price": record.close_price,
+                    "volume": record.volume,
+                    "trading_value": record.trading_value,
+                    "trading_value_rank": record.trading_value_rank,
+                    "simulation_enabled": record.symbol_id == SIMULATION_SYMBOL,
+                }
+                for record in records
+            ],
+        }
+    )
 
 
 @api_view(["DELETE"])
