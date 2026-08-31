@@ -23,6 +23,21 @@ class OrderRequestSerializer(serializers.Serializer):
         )
 
 
+class SymbolQuerySerializer(serializers.Serializer):
+    q = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        trim_whitespace=True,
+        default="",
+    )
+    limit = serializers.IntegerField(required=False, min_value=1, max_value=100, default=20)
+
+
+class RecentTradeQuerySerializer(serializers.Serializer):
+    symbol = serializers.CharField(max_length=6, trim_whitespace=True)
+    limit = serializers.IntegerField(required=False, min_value=1, max_value=200, default=50)
+
+
 class TraderProfileSerializer(serializers.ModelSerializer):
     """Frontend-facing representation of one simulated market participant."""
 
@@ -83,6 +98,7 @@ def trade_payload(trade: Trade) -> dict[str, object]:
     return {
         "trade_id": str(trade.trade_id),
         "symbol": trade.symbol,
+        "executed_at": trade.executed_at.isoformat().replace("+00:00", "Z"),
         "price": trade.price,
         "qty": trade.quantity,
         "buy_order_id": str(trade.buy_order_id),

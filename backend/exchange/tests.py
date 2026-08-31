@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 from unittest.mock import patch
 
 from django.db import DatabaseError
@@ -7,7 +8,7 @@ from django.test import override_settings
 from django.core.management import call_command
 
 from exchange import views
-from exchange.models import TraderProfile
+from exchange.models import MarketDaily, Symbol, TraderProfile
 from exchange.orderbook import OrderBook
 
 
@@ -61,6 +62,38 @@ class OrderApiTests(APITestCase):
         self.assertEqual(buy_response.data["remaining_qty"], 0)
         self.assertEqual(buy_response.data["trades"][0]["price"], 70_000)
         self.assertEqual(buy_response.data["trades"][0]["qty"], 3)
+        self.assertTrue(buy_response.data["trades"][0]["executed_at"].endswith("Z"))
+
+    def test_recent_trades_are_returned_newest_first(self):
+        self.submit_order(user_id="seller-1", side="SELL", price=70_000, qty=1)
+        self.submit_order(user_id="buyer-1", side="BUY", price=70_000, qty=1)
+        self.submit_order(user_id="seller-2", side="SELL", price=70_100, qty=1)
+        self.submit_order(user_id="buyer-2", side="BUY", price=70_100, qty=1)
+
+        response = self.client.get(
+            reverse("recent-trade-list"),
+            {"symbol": "005930", "limit": 1},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["symbol"], "005930")
+        self.assertEqual(len(response.data["trades"]), 1)
+        self.assertEqual(response.data["trades"][0]["price"], 70_100)
+        self.assertTrue(response.data["trades"][0]["executed_at"].endswith("Z"))
+
+    def test_recent_trades_reject_invalid_limit_and_unsupported_symbol(self):
+        invalid_limit = self.client.get(
+            reverse("recent-trade-list"),
+            {"symbol": "005930", "limit": 201},
+        )
+        unsupported_symbol = self.client.get(
+            reverse("recent-trade-list"),
+            {"symbol": "000660"},
+        )
+
+        self.assertEqual(invalid_limit.status_code, 400)
+        self.assertIn("limit", invalid_limit.data)
+        self.assertEqual(unsupported_symbol.status_code, 404)
 
     @override_settings(TRADE_EXECUTION_LOG_ENABLED=True)
     def test_execution_log_is_emitted_only_for_a_matched_trade(self):
@@ -100,6 +133,99 @@ class OrderApiTests(APITestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("side", response.data)
+
+
+class SymbolApiTests(APITestCase):
+    latest_trade_date = date(2026, 8, 28)
+
+    @staticmethod
+    def create_daily(
+        *,
+        ticker: str,
+        name: str,
+        trade_date: date,
+        rank: int,
+        close_price: int = 70_000,
+    ) -> None:
+        symbol, _ = Symbol.objects.update_or_create(
+            ticker=ticker,
+            defaults={"name": name, "market": Symbol.Market.KOSPI},
+        )
+        MarketDaily.objects.create(
+            symbol=symbol,
+            trade_date=trade_date,
+            close_price=close_price,
+            volume=1_000,
+            trading_value=1_000_000 - rank,
+            trading_value_rank=rank,
+            source_payload={},
+        )
+
+    def test_symbols_searches_latest_trade_date_by_name_and_ticker(self):
+        self.create_daily(
+            ticker="005930",
+            name="삼성전자",
+            trade_date=self.latest_trade_date - timedelta(days=1),
+            rank=1,
+            close_price=69_000,
+        )
+        self.create_daily(
+            ticker="005930",
+            name="삼성전자",
+            trade_date=self.latest_trade_date,
+            rank=2,
+            close_price=70_000,
+        )
+        self.create_daily(
+            ticker="000660",
+            name="SK하이닉스",
+            trade_date=self.latest_trade_date,
+            rank=1,
+            close_price=250_000,
+        )
+
+        name_response = self.client.get(reverse("symbol-list"), {"q": "삼성"})
+        ticker_response = self.client.get(reverse("symbol-list"), {"q": "000660"})
+
+        self.assertEqual(name_response.status_code, 200)
+        self.assertEqual(name_response.data["trade_date"], "2026-08-28")
+        self.assertEqual(len(name_response.data["results"]), 1)
+        self.assertEqual(name_response.data["results"][0]["ticker"], "005930")
+        self.assertEqual(name_response.data["results"][0]["close_price"], 70_000)
+        self.assertTrue(name_response.data["results"][0]["simulation_enabled"])
+        self.assertEqual(ticker_response.data["results"][0]["name"], "SK하이닉스")
+        self.assertFalse(ticker_response.data["results"][0]["simulation_enabled"])
+
+    def test_symbols_are_ranked_and_limited(self):
+        self.create_daily(
+            ticker="005930",
+            name="삼성전자",
+            trade_date=self.latest_trade_date,
+            rank=2,
+        )
+        self.create_daily(
+            ticker="000660",
+            name="SK하이닉스",
+            trade_date=self.latest_trade_date,
+            rank=1,
+        )
+
+        response = self.client.get(reverse("symbol-list"), {"limit": 1})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([item["ticker"] for item in response.data["results"]], ["000660"])
+
+    def test_symbols_returns_empty_contract_without_reference_data(self):
+        response = self.client.get(reverse("symbol-list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, {"trade_date": None, "results": []})
+
+    def test_symbols_rejects_invalid_limit(self):
+        response = self.client.get(reverse("symbol-list"), {"limit": 101})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("limit", response.data)
 
 
 @override_settings(DEBUG=True)
