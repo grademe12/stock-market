@@ -35,8 +35,12 @@ LOADTEST_ARTIFACTS_DIR ?= .artifacts/loadtest
 TRADE_DATE ?=
 BACKUP_FILE ?=
 DB_TAILSCALE_COMPOSE ?= docker compose -f compose.yaml -f db/compose.tailscale.yaml
+RUNNER_COMPOSE_FILE ?= participant-runner/compose.yaml
+RUNNER_STRATEGY_PROJECT = stock-market-runner-$(subst _,-,$(STRATEGY))
+RUNNER_STRATEGIES := noise momentum mean_reversion liquidity_provider event_reactive
+RUNNER_UP_FLAGS ?= --build
 
-.PHONY: backend-setup backend-migrate backend-test backend-run participant-runner-test db-up db-tailscale-up db-status db-health db-backup db-restore db-migrate import-krx-top100 container-build container-backend-up container-down demo-up demo-seed demo-runner-up demo-logs demo-down load-backend-up load-backend-stats load-steady test run
+.PHONY: backend-setup backend-migrate backend-test backend-run participant-runner-test runner-build runners-up runners-down runner-up runner-down runner-status runner-logs noise-runner-up noise-runner-down momentum-runner-up momentum-runner-down mean-reversion-runner-up mean-reversion-runner-down liquidity-provider-runner-up liquidity-provider-runner-down event-reactive-runner-up event-reactive-runner-down db-up db-tailscale-up db-status db-health db-backup db-restore db-migrate import-krx-top100 container-build container-backend-up container-down demo-up demo-seed demo-runner-up demo-logs demo-down load-backend-up load-backend-stats load-steady test run
 backend-setup: ## Create backend virtualenv and install dependencies
 	python3 -m venv $(BACKEND_DIR)/.venv
 	$(BACKEND_PYTHON) -m pip install --upgrade pip
@@ -53,6 +57,68 @@ backend-run: ## Start Django development server
 
 participant-runner-test: ## Run external participant runner tests
 	cd participant-runner && PYTHONPATH=../backend python3 -m unittest discover
+
+runner-build: ## Build the participant-runner image
+	@test -f participant-runner/.env || { echo "copy participant-runner/.env.example to participant-runner/.env first"; exit 1; }
+	docker compose -f $(RUNNER_COMPOSE_FILE) build runner
+
+runners-up: runner-build ## Start one runner for every supported strategy
+	@set -e; for strategy in $(RUNNER_STRATEGIES); do \
+		$(MAKE) --no-print-directory runner-up STRATEGY=$$strategy RUNNER_UP_FLAGS=; \
+	done
+
+runners-down: ## Stop every strategy runner
+	@set -e; for strategy in $(RUNNER_STRATEGIES); do \
+		$(MAKE) --no-print-directory runner-down STRATEGY=$$strategy; \
+	done
+
+runner-up:
+	@test -n "$(STRATEGY)" || { echo "set STRATEGY: $(RUNNER_STRATEGIES)"; exit 1; }
+	@case " $(RUNNER_STRATEGIES) " in *" $(STRATEGY) "*) ;; *) echo "unsupported STRATEGY=$(STRATEGY); choose: $(RUNNER_STRATEGIES)"; exit 1;; esac
+	@test -f participant-runner/.env || { echo "copy participant-runner/.env.example to participant-runner/.env first"; exit 1; }
+	RUNNER_STRATEGIES=$(STRATEGY) docker compose -p $(RUNNER_STRATEGY_PROJECT) -f $(RUNNER_COMPOSE_FILE) up -d $(RUNNER_UP_FLAGS)
+
+runner-down:
+	@test -n "$(STRATEGY)" || { echo "set STRATEGY: $(RUNNER_STRATEGIES)"; exit 1; }
+	@case " $(RUNNER_STRATEGIES) " in *" $(STRATEGY) "*) ;; *) echo "unsupported STRATEGY=$(STRATEGY); choose: $(RUNNER_STRATEGIES)"; exit 1;; esac
+	RUNNER_STRATEGIES=$(STRATEGY) docker compose -p $(RUNNER_STRATEGY_PROJECT) -f $(RUNNER_COMPOSE_FILE) down
+
+runner-status: ## Show all running participant-runner containers
+	@docker ps --filter label=com.docker.compose.service=runner --format 'table {{.Names}}\t{{.Status}}\t{{.Label "com.docker.compose.project"}}'
+
+runner-logs: ## Follow one strategy runner log (example: make runner-logs STRATEGY=noise)
+	@test -n "$(STRATEGY)" || { echo "set STRATEGY: $(RUNNER_STRATEGIES)"; exit 1; }
+	RUNNER_STRATEGIES=$(STRATEGY) docker compose -p $(RUNNER_STRATEGY_PROJECT) -f $(RUNNER_COMPOSE_FILE) logs -f runner
+
+noise-runner-up: ## Start the noise strategy runner
+	$(MAKE) --no-print-directory runner-up STRATEGY=noise
+
+noise-runner-down: ## Stop the noise strategy runner
+	$(MAKE) --no-print-directory runner-down STRATEGY=noise
+
+momentum-runner-up: ## Start the momentum strategy runner
+	$(MAKE) --no-print-directory runner-up STRATEGY=momentum
+
+momentum-runner-down: ## Stop the momentum strategy runner
+	$(MAKE) --no-print-directory runner-down STRATEGY=momentum
+
+mean-reversion-runner-up: ## Start the mean-reversion strategy runner
+	$(MAKE) --no-print-directory runner-up STRATEGY=mean_reversion
+
+mean-reversion-runner-down: ## Stop the mean-reversion strategy runner
+	$(MAKE) --no-print-directory runner-down STRATEGY=mean_reversion
+
+liquidity-provider-runner-up: ## Start the liquidity-provider strategy runner
+	$(MAKE) --no-print-directory runner-up STRATEGY=liquidity_provider
+
+liquidity-provider-runner-down: ## Stop the liquidity-provider strategy runner
+	$(MAKE) --no-print-directory runner-down STRATEGY=liquidity_provider
+
+event-reactive-runner-up: ## Start the event-reactive strategy runner
+	$(MAKE) --no-print-directory runner-up STRATEGY=event_reactive
+
+event-reactive-runner-down: ## Stop the event-reactive strategy runner
+	$(MAKE) --no-print-directory runner-down STRATEGY=event_reactive
 
 db-up: ## Start the PostgreSQL container
 	docker compose up -d postgres

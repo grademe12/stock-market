@@ -175,6 +175,16 @@ class ParticipantRunnerTests(TestCase):
             "event_reactive-5",
         ])
 
+        filtered = build_participants(
+            profiles,
+            trader_strategies=("momentum", "liquidity_provider"),
+        )
+
+        self.assertEqual(
+            [participant.user_id for participant in filtered],
+            ["momentum-2", "liquidity_provider-4"],
+        )
+
     def test_runner_emits_periodic_status_and_cleans_up_on_stop(self) -> None:
         client = FakeBackendClient()
         runner = ParticipantRunner(client, (StaticParticipant((buy_intent(ttl=2),)),))

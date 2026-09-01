@@ -1,0 +1,13 @@
+services:
+  runner:
+    build:
+      context: ..
+      dockerfile: participant-runner/Dockerfile
+    image: stock-market-participant-runner
+    env_file:
+      - .env
+    environment:
+      TRADER_STRATEGIES: ${RUNNER_STRATEGIES:-}
+    network_mode: host
+    restart: unless-stopped
+    stop_grace_period: 30s

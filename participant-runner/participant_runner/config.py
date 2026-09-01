@@ -2,6 +2,8 @@ from dataclasses import dataclass
 import os
 from pathlib import Path
 
+from exchange.participants.types import SUPPORTED_STRATEGIES
+
 
 class ConfigurationError(ValueError):
     pass
@@ -30,6 +32,7 @@ class RunnerConfig:
     status_log_interval_ticks: int
     max_traders: int | None
     trader_ids: tuple[str, ...]
+    trader_strategies: tuple[str, ...]
     scenario_path: Path | None
 
     @classmethod
@@ -46,6 +49,18 @@ class RunnerConfig:
         if len(set(trader_ids)) != len(trader_ids):
             raise ConfigurationError("TRADER_IDS must not contain duplicates")
 
+        trader_strategies = tuple(
+            strategy.strip()
+            for strategy in os.getenv("TRADER_STRATEGIES", "").split(",")
+            if strategy.strip()
+        )
+        if len(set(trader_strategies)) != len(trader_strategies):
+            raise ConfigurationError("TRADER_STRATEGIES must not contain duplicates")
+        unsupported_strategies = set(trader_strategies) - set(SUPPORTED_STRATEGIES)
+        if unsupported_strategies:
+            unsupported = ", ".join(sorted(unsupported_strategies))
+            raise ConfigurationError(f"unsupported TRADER_STRATEGIES: {unsupported}")
+
         raw_scenario = os.getenv("SCENARIO_PATH", "").strip()
         return cls(
             backend_base_url=backend_base_url,
@@ -56,5 +71,6 @@ class RunnerConfig:
             ),
             max_traders=_positive_int("MAX_TRADERS"),
             trader_ids=trader_ids,
+            trader_strategies=trader_strategies,
             scenario_path=Path(raw_scenario) if raw_scenario else None,
         )
