@@ -21,8 +21,10 @@ cp observability/.env.example observability/.env
 ```dotenv
 OBSERVABILITY_BIND_ADDRESS=100.x.y.z
 BACKEND_TAILSCALE_IP=100.x.y.z
-GRAFANA_ADMIN_PASSWORD=replace-me
+GRAFANA_ADMIN_PASSWORD=
 ```
+
+`GRAFANA_ADMIN_PASSWORD`에는 빈 값 대신 직접 생성한 강한 비밀번호를 입력한다.
 
 ## Run
 
