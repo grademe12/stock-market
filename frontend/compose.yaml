@@ -1,0 +1,13 @@
+services:
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: stock-market-dashboard:local
+    network_mode: host
+    env_file:
+      - .env
+    environment:
+      HOSTNAME: ${FRONTEND_BIND_ADDRESS:-127.0.0.1}
+      PORT: "3000"
+    restart: unless-stopped

@@ -30,6 +30,7 @@ def main() -> int:
         participants = build_participants(
             client.fetch_trader_profiles(),
             trader_ids=config.trader_ids,
+            trader_strategies=config.trader_strategies,
             max_traders=config.max_traders,
         )
         coordinator = _build_coordinator(arguments.scenario, config, participants)

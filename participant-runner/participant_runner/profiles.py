@@ -12,13 +12,17 @@ class InvalidTraderProfileError(ValueError):
 def build_participants(
     profiles: Iterable[dict[str, Any]],
     trader_ids: tuple[str, ...] = (),
+    trader_strategies: tuple[str, ...] = (),
     max_traders: int | None = None,
 ) -> tuple[TradingParticipant, ...]:
     selected_ids = set(trader_ids)
+    selected_strategies = set(trader_strategies)
     selected_profiles = [
         profile
         for profile in profiles
-        if profile.get("enabled") and (not selected_ids or str(profile.get("id")) in selected_ids)
+        if profile.get("enabled")
+        and (not selected_ids or str(profile.get("id")) in selected_ids)
+        and (not selected_strategies or profile.get("strategy") in selected_strategies)
     ]
 
     if selected_ids:
