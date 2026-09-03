@@ -28,6 +28,7 @@ services:
       POSTGRES_PORT: "5432"
       DJANGO_DEBUG: "1"
       TRADE_EXECUTION_LOG_ENABLED: ${TRADE_EXECUTION_LOG_ENABLED:-1}
+      SIMULATION_SYMBOL_LIMIT: ${SIMULATION_SYMBOL_LIMIT:-10}
       DJANGO_SECRET_KEY: local-container-development-key
       DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,backend
     ports:

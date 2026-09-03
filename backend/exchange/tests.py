@@ -5,12 +5,12 @@ from django.db import DatabaseError
 from rest_framework.test import APITestCase
 from django.urls import reverse
 from django.test import override_settings
-from django.core.management import call_command
+from django.core.management import CommandError, call_command
 from prometheus_client import REGISTRY
 
 from exchange import views
 from exchange.models import MarketDaily, Symbol, TraderProfile
-from exchange.orderbook import OrderBook
+from exchange.orderbook.registry import books
 
 
 class HealthEndpointTests(APITestCase):
@@ -53,7 +53,7 @@ class ReadinessEndpointTests(APITestCase):
 
 class OrderApiTests(APITestCase):
     def setUp(self) -> None:
-        views.order_book = OrderBook(symbol=views.SIMULATION_SYMBOL)
+        books.reset()
 
     def submit_order(self, **overrides):
         payload = {
@@ -131,6 +131,39 @@ class OrderApiTests(APITestCase):
         self.assertEqual(invalid_limit.status_code, 400)
         self.assertIn("limit", invalid_limit.data)
         self.assertEqual(unsupported_symbol.status_code, 404)
+
+    def test_orders_on_two_simulated_symbols_do_not_cross(self):
+        SymbolApiTests.create_daily(
+            ticker="005930",
+            name="삼성전자",
+            trade_date=SymbolApiTests.latest_trade_date,
+            rank=1,
+        )
+        SymbolApiTests.create_daily(
+            ticker="000660",
+            name="SK하이닉스",
+            trade_date=SymbolApiTests.latest_trade_date,
+            rank=2,
+            close_price=250_000,
+        )
+
+        samsung_sell = self.submit_order(user_id="samsung-seller", side="SELL", qty=2)
+        hynix_buy = self.submit_order(
+            user_id="hynix-buyer",
+            symbol="000660",
+            side="BUY",
+            price=250_000,
+            qty=2,
+        )
+        samsung_book = self.client.get(reverse("book-detail", args=["005930"]))
+        hynix_book = self.client.get(reverse("book-detail", args=["000660"]))
+
+        self.assertEqual(samsung_sell.status_code, 201)
+        self.assertEqual(hynix_buy.status_code, 201)
+        self.assertEqual(hynix_buy.data["remaining_qty"], 2)
+        self.assertEqual(hynix_buy.data["trades"], [])
+        self.assertEqual(samsung_book.data["asks"], [{"price": 70_000, "qty": 2}])
+        self.assertEqual(hynix_book.data["bids"], [{"price": 250_000, "qty": 2}])
 
     @override_settings(TRADE_EXECUTION_LOG_ENABLED=True)
     def test_execution_log_is_emitted_only_for_a_matched_trade(self):
@@ -231,7 +264,28 @@ class SymbolApiTests(APITestCase):
         self.assertEqual(name_response.data["results"][0]["close_price"], 70_000)
         self.assertTrue(name_response.data["results"][0]["simulation_enabled"])
         self.assertEqual(ticker_response.data["results"][0]["name"], "SK하이닉스")
-        self.assertFalse(ticker_response.data["results"][0]["simulation_enabled"])
+        self.assertTrue(ticker_response.data["results"][0]["simulation_enabled"])
+
+    @override_settings(SIMULATION_SYMBOL_LIMIT=1)
+    def test_simulation_limit_enables_only_the_top_ranked_symbol(self):
+        self.create_daily(
+            ticker="005930",
+            name="삼성전자",
+            trade_date=self.latest_trade_date,
+            rank=2,
+        )
+        self.create_daily(
+            ticker="000660",
+            name="SK하이닉스",
+            trade_date=self.latest_trade_date,
+            rank=1,
+        )
+
+        samsung = self.client.get(reverse("symbol-list"), {"q": "005930"})
+        hynix = self.client.get(reverse("symbol-list"), {"q": "000660"})
+
+        self.assertFalse(samsung.data["results"][0]["simulation_enabled"])
+        self.assertTrue(hynix.data["results"][0]["simulation_enabled"])
 
     def test_symbols_are_ranked_and_limited(self):
         self.create_daily(
@@ -268,7 +322,7 @@ class SymbolApiTests(APITestCase):
 @override_settings(DEBUG=True)
 class TraderProfileApiTests(APITestCase):
     def setUp(self) -> None:
-        views.order_book = OrderBook(symbol=views.SIMULATION_SYMBOL)
+        books.reset()
 
     @staticmethod
     def profile_payload(**overrides):
@@ -386,3 +440,10 @@ class SeedTradersCommandTests(APITestCase):
             set(TraderProfile.objects.values_list("strategy", flat=True)),
             set(strategies),
         )
+
+    def test_seed_command_rejects_a_symbol_outside_the_simulation_set(self):
+        with self.assertRaises(CommandError) as raised:
+            call_command("seed_traders", count=1, seed=42, symbol="000660")
+
+        self.assertIn("000660", str(raised.exception))
+        self.assertEqual(TraderProfile.objects.count(), 0)

@@ -10,8 +10,10 @@ from rest_framework.decorators import api_view
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.response import Response
 
-from exchange.orderbook import OrderBook, OrderNotFoundError, OrderSide
+from exchange.orderbook import OrderNotFoundError, OrderSide
+from exchange.orderbook.registry import books
 from exchange.models import MarketDaily, TraderProfile
+from exchange.simulation import FALLBACK_SYMBOL, is_simulated_symbol
 from exchange.metrics import (
     ORDERBOOK_DEPTH,
     ORDERS_REJECTED,
@@ -29,23 +31,22 @@ from exchange.serializers import (
     trade_payload,
 )
 
-SIMULATION_SYMBOL = "005930"
+SIMULATION_SYMBOL = FALLBACK_SYMBOL
 execution_logger = logging.getLogger("exchange.execution")
-order_book = OrderBook(symbol=SIMULATION_SYMBOL)
 
 
-def _update_orderbook_depth() -> None:
-    snapshot = order_book.snapshot()
+def _update_orderbook_depth(symbol: str) -> None:
+    book = books.get(symbol)
+    if book is None:
+        return
+    snapshot = book.snapshot()
     for side, levels in (
         (OrderSide.BUY, snapshot.bids),
         (OrderSide.SELL, snapshot.asks),
     ):
-        ORDERBOOK_DEPTH.labels(SIMULATION_SYMBOL, side.value).set(
+        ORDERBOOK_DEPTH.labels(symbol, side.value).set(
             sum(level.quantity for level in levels)
         )
-
-
-_update_orderbook_depth()
 
 
 @api_view(["GET"])
@@ -77,17 +78,17 @@ def create_order(request):
         raise ValidationError(serializer.errors)
     order = serializer.create_order()
 
-    if order.symbol != SIMULATION_SYMBOL:
+    if not is_simulated_symbol(order.symbol):
         ORDERS_REJECTED.labels("unsupported_symbol").inc()
-        raise ValidationError({"symbol": f"only {SIMULATION_SYMBOL} is supported"})
+        raise ValidationError({"symbol": "symbol is not in the current simulation set"})
 
     ORDERS_SUBMITTED.labels(order.symbol, order.side.value).inc()
-    result = order_book.submit(order)
+    result = books.submit(order)
     TRADES_EXECUTED.labels(order.symbol).inc(len(result.trades))
     TRADED_QUANTITY.labels(order.symbol).inc(
         sum(trade.quantity for trade in result.trades)
     )
-    _update_orderbook_depth()
+    _update_orderbook_depth(order.symbol)
     _log_executed_trades(result)
     return Response(
         match_result_payload(result),
@@ -97,10 +98,11 @@ def create_order(request):
 
 @api_view(["GET"])
 def book_detail(request, symbol: str):
-    if symbol != SIMULATION_SYMBOL:
+    book = books.get(symbol)
+    if book is None:
         raise NotFound("symbol was not found")
 
-    return Response(snapshot_payload(order_book.snapshot()))
+    return Response(snapshot_payload(book.snapshot()))
 
 
 @api_view(["GET"])
@@ -108,10 +110,11 @@ def recent_trade_list(request):
     query = RecentTradeQuerySerializer(data=request.query_params)
     query.is_valid(raise_exception=True)
     symbol = query.validated_data["symbol"]
-    if symbol != SIMULATION_SYMBOL:
+    book = books.get(symbol)
+    if book is None:
         raise NotFound("symbol was not found")
 
-    trades = order_book.recent_trades(query.validated_data["limit"])
+    trades = book.recent_trades(query.validated_data["limit"])
     return Response(
         {
             "symbol": symbol,
@@ -151,7 +154,7 @@ def symbol_list(request):
                     "volume": record.volume,
                     "trading_value": record.trading_value,
                     "trading_value_rank": record.trading_value_rank,
-                    "simulation_enabled": record.symbol_id == SIMULATION_SYMBOL,
+                    "simulation_enabled": is_simulated_symbol(record.symbol_id),
                 }
                 for record in records
             ],
@@ -162,7 +165,7 @@ def symbol_list(request):
 @api_view(["DELETE"])
 def cancel_order(request, order_id: UUID):
     try:
-        canceled_order = order_book.cancel(order_id)
+        canceled_order = books.cancel(order_id)
     except OrderNotFoundError:
         # A TTL-based client can race a fill. Cancellation is intentionally
         # idempotent even though this early in-memory engine has no history.
@@ -174,7 +177,7 @@ def cancel_order(request, order_id: UUID):
             }
         )
 
-    _update_orderbook_depth()
+    _update_orderbook_depth(canceled_order.order.symbol)
     return Response(
         {
             "order_id": str(canceled_order.order.order_id),

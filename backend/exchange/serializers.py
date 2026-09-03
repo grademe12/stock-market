@@ -2,8 +2,9 @@ from rest_framework import serializers
 
 from exchange.models import TraderProfile
 from exchange.orderbook import BookSnapshot, MatchResult, Order, OrderSide, Trade
+from exchange.simulation import FALLBACK_SYMBOL, is_simulated_symbol
 
-SIMULATION_SYMBOL = "005930"
+SIMULATION_SYMBOL = FALLBACK_SYMBOL
 
 
 class OrderRequestSerializer(serializers.Serializer):
@@ -87,9 +88,9 @@ class TraderProfileSerializer(serializers.ModelSerializer):
             )
 
         symbol = attrs.get("symbol", instance.symbol if instance is not None else SIMULATION_SYMBOL)
-        if symbol != SIMULATION_SYMBOL:
+        if not is_simulated_symbol(symbol):
             raise serializers.ValidationError(
-                {"symbol": f"only {SIMULATION_SYMBOL} is supported"}
+                {"symbol": "symbol is not in the current simulation set"}
             )
         return attrs
 

@@ -8,6 +8,27 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "unsafe-development-key-change-before-production")
 DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
 TRADE_EXECUTION_LOG_ENABLED = os.getenv("TRADE_EXECUTION_LOG_ENABLED", "0") == "1"
+
+
+def _env_int(name: str, default: int, *, minimum: int, maximum: int) -> int:
+    raw_value = os.getenv(name)
+    if raw_value is None or not raw_value.strip():
+        return default
+    try:
+        value = int(raw_value)
+    except ValueError as exc:
+        raise RuntimeError(f"{name} must be an integer") from exc
+    if not minimum <= value <= maximum:
+        raise RuntimeError(f"{name} must be between {minimum} and {maximum}")
+    return value
+
+
+SIMULATION_SYMBOL_LIMIT = _env_int(
+    "SIMULATION_SYMBOL_LIMIT",
+    10,
+    minimum=1,
+    maximum=100,
+)
 ALLOWED_HOSTS = [
     host.strip()
     for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
