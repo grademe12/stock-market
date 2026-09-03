@@ -35,8 +35,9 @@ LOADTEST_ARTIFACTS_DIR ?= .artifacts/loadtest
 TRADE_DATE ?=
 BACKUP_FILE ?=
 DB_TAILSCALE_COMPOSE ?= docker compose -f compose.yaml -f db/compose.tailscale.yaml
+MONITORING_COMPOSE ?= docker compose --env-file observability/.env -f observability/compose.yaml
 
-.PHONY: backend-setup backend-migrate backend-test backend-run participant-runner-test db-up db-tailscale-up db-status db-health db-backup db-restore db-migrate import-krx-top100 container-build container-backend-up container-down demo-up demo-seed demo-runner-up demo-logs demo-down load-backend-up load-backend-stats load-steady test run
+.PHONY: backend-setup backend-migrate backend-test backend-run participant-runner-test db-up db-tailscale-up db-status db-health db-backup db-restore db-migrate import-krx-top100 container-build container-backend-up container-down demo-up demo-seed demo-runner-up demo-logs demo-down load-backend-up load-backend-stats load-steady monitoring-config monitoring-up monitoring-down monitoring-status monitoring-logs test run
 backend-setup: ## Create backend virtualenv and install dependencies
 	python3 -m venv $(BACKEND_DIR)/.venv
 	$(BACKEND_PYTHON) -m pip install --upgrade pip
@@ -126,6 +127,25 @@ load-steady: ## Run the steady order-rate k6 scenario and save its JSON summary
 		-e ORDER_RATE=$(ORDER_RATE) \
 		-e TEST_DURATION=$(TEST_DURATION) \
 		k6 run --quiet --summary-export "$$result_file" /scripts/scenarios/steady.js
+
+monitoring-config: ## Validate the Prometheus and Grafana Compose configuration
+	@test -f observability/.env || { echo "copy observability/.env.example to observability/.env first"; exit 1; }
+	$(MONITORING_COMPOSE) config --quiet
+
+monitoring-up: monitoring-config ## Start Prometheus, Grafana, and the readiness probe
+	$(MONITORING_COMPOSE) up -d
+
+monitoring-down: ## Stop monitoring containers (keeps metric and dashboard volumes)
+	@test -f observability/.env || { echo "missing observability/.env"; exit 1; }
+	$(MONITORING_COMPOSE) down
+
+monitoring-status: ## Show Prometheus and Grafana container status
+	@test -f observability/.env || { echo "missing observability/.env"; exit 1; }
+	$(MONITORING_COMPOSE) ps
+
+monitoring-logs: ## Follow Prometheus, Grafana, and probe logs
+	@test -f observability/.env || { echo "missing observability/.env"; exit 1; }
+	$(MONITORING_COMPOSE) logs -f
 
 test: backend-test ## Alias for backend-test
 

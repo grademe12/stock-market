@@ -6,6 +6,7 @@ from rest_framework.test import APITestCase
 from django.urls import reverse
 from django.test import override_settings
 from django.core.management import call_command
+from prometheus_client import REGISTRY
 
 from exchange import views
 from exchange.models import MarketDaily, Symbol, TraderProfile
@@ -18,6 +19,18 @@ class HealthEndpointTests(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"status": "ok"})
+
+    def test_metrics_endpoint_exposes_application_and_process_metrics(self):
+        response = self.client.get(reverse("metrics"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/plain", response["Content-Type"])
+        self.assertContains(response, "http_requests_total")
+        self.assertContains(response, "http_request_duration_seconds_bucket")
+        self.assertContains(response, "orders_submitted_total")
+        self.assertContains(response, "orders_rejected_total")
+        self.assertContains(response, "orderbook_depth")
+        self.assertContains(response, "process_resident_memory_bytes")
 
 
 class ReadinessEndpointTests(APITestCase):
@@ -54,6 +67,10 @@ class OrderApiTests(APITestCase):
         return self.client.post(reverse("order-create"), payload, format="json")
 
     def test_orders_match_and_return_the_execution_result(self):
+        submitted_before = REGISTRY.get_sample_value(
+            "orders_submitted_total",
+            {"symbol": "005930", "side": "BUY"},
+        ) or 0
         resting_sell = self.submit_order(user_id="seller", side="SELL", price=70_000, qty=5)
         buy_response = self.submit_order(user_id="buyer", side="BUY", price=71_000, qty=3)
 
@@ -63,6 +80,26 @@ class OrderApiTests(APITestCase):
         self.assertEqual(buy_response.data["trades"][0]["price"], 70_000)
         self.assertEqual(buy_response.data["trades"][0]["qty"], 3)
         self.assertTrue(buy_response.data["trades"][0]["executed_at"].endswith("Z"))
+        submitted_after = REGISTRY.get_sample_value(
+            "orders_submitted_total",
+            {"symbol": "005930", "side": "BUY"},
+        ) or 0
+        self.assertEqual(submitted_after - submitted_before, 1)
+
+    def test_invalid_order_increments_rejection_metric(self):
+        rejected_before = REGISTRY.get_sample_value(
+            "orders_rejected_total",
+            {"reason": "validation_error"},
+        ) or 0
+
+        response = self.submit_order(qty=0)
+
+        self.assertEqual(response.status_code, 400)
+        rejected_after = REGISTRY.get_sample_value(
+            "orders_rejected_total",
+            {"reason": "validation_error"},
+        ) or 0
+        self.assertEqual(rejected_after - rejected_before, 1)
 
     def test_recent_trades_are_returned_newest_first(self):
         self.submit_order(user_id="seller-1", side="SELL", price=70_000, qty=1)

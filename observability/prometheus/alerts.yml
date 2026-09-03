@@ -1,0 +1,30 @@
+groups:
+  - name: stock-market-backend
+    rules:
+      - alert: BackendMetricsUnavailable
+        expr: up{job="stock-market-backend"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Backend metrics endpoint is unavailable
+
+      - alert: BackendReadinessFailed
+        expr: probe_success{job="stock-market-backend-readiness",instance=~".*stock-market-gce.*"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Backend readiness probe is failing
+
+      - alert: BackendServerErrorRateHigh
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(http_requests_total[5m])), 0.001)
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Backend 5xx response ratio is above 5%

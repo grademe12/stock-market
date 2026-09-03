@@ -2,3 +2,4 @@ Django>=6.0,<6.1
 djangorestframework>=3.17,<3.18
 gunicorn>=23.0,<24.0
 psycopg[binary]>=3.2,<3.4
+prometheus-client>=0.25,<0.26

@@ -15,6 +15,7 @@
 | [docs/DEMO_RUNBOOK.md](docs/DEMO_RUNBOOK.md) | 재현 가능한 backend·runner 실험 실행 절차 |
 | [docs/UBUNTU_SETUP.md](docs/UBUNTU_SETUP.md) | Ubuntu/WSL 1회 셋업 체크리스트 |
 | [docs/GCP_DEPLOYMENT_READINESS.md](docs/GCP_DEPLOYMENT_READINESS.md) | Tailscale 기반 GCE·로컬 PostgreSQL 배포 결정과 완료 조건 |
+| [observability/README.md](observability/README.md) | Prometheus·Grafana 백엔드 모니터링 실행 방법 |
 
 ## 프로젝트 구조
 
@@ -62,4 +63,5 @@ Stage 0~2에서는 `backend/`의 Django 단일 프로세스와 k6만 사용한�
 | Stage 1.5: 거래 참여자 시뮬레이션 | 완료 (외부 HTTP runner와 5개 전략, event_reactive는 휴면) |
 | Stage 2: k6 부하 테스트·기본 rate limit | 진행 중 (steady 기준 측정 완료, rate limit 예정) |
 | Stage 2.5: PostgreSQL·KRX KOSPI 참조 데이터 | 완료 (2026-07-27 상위 100개 적재 검증) |
-| Stage 3+: 관측성·queue·영속화·K8s | 측정 결과에 따라 순차 도입 |
+| Stage 3: 애플리케이션 관측성 | 진행 중 (`/metrics`, Prometheus·Grafana Compose, backend 대시보드 구현) |
+| Stage 4+: queue·영속화·K8s | 측정 결과에 따라 순차 도입 |

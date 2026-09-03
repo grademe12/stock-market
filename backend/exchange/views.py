@@ -10,8 +10,15 @@ from rest_framework.decorators import api_view
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.response import Response
 
-from exchange.orderbook import OrderBook, OrderNotFoundError
+from exchange.orderbook import OrderBook, OrderNotFoundError, OrderSide
 from exchange.models import MarketDaily, TraderProfile
+from exchange.metrics import (
+    ORDERBOOK_DEPTH,
+    ORDERS_REJECTED,
+    ORDERS_SUBMITTED,
+    TRADED_QUANTITY,
+    TRADES_EXECUTED,
+)
 from exchange.serializers import (
     OrderRequestSerializer,
     RecentTradeQuerySerializer,
@@ -25,6 +32,20 @@ from exchange.serializers import (
 SIMULATION_SYMBOL = "005930"
 execution_logger = logging.getLogger("exchange.execution")
 order_book = OrderBook(symbol=SIMULATION_SYMBOL)
+
+
+def _update_orderbook_depth() -> None:
+    snapshot = order_book.snapshot()
+    for side, levels in (
+        (OrderSide.BUY, snapshot.bids),
+        (OrderSide.SELL, snapshot.asks),
+    ):
+        ORDERBOOK_DEPTH.labels(SIMULATION_SYMBOL, side.value).set(
+            sum(level.quantity for level in levels)
+        )
+
+
+_update_orderbook_depth()
 
 
 @api_view(["GET"])
@@ -51,13 +72,22 @@ def readiness(request):
 @api_view(["POST"])
 def create_order(request):
     serializer = OrderRequestSerializer(data=request.data)
-    serializer.is_valid(raise_exception=True)
+    if not serializer.is_valid():
+        ORDERS_REJECTED.labels("validation_error").inc()
+        raise ValidationError(serializer.errors)
     order = serializer.create_order()
 
     if order.symbol != SIMULATION_SYMBOL:
+        ORDERS_REJECTED.labels("unsupported_symbol").inc()
         raise ValidationError({"symbol": f"only {SIMULATION_SYMBOL} is supported"})
 
+    ORDERS_SUBMITTED.labels(order.symbol, order.side.value).inc()
     result = order_book.submit(order)
+    TRADES_EXECUTED.labels(order.symbol).inc(len(result.trades))
+    TRADED_QUANTITY.labels(order.symbol).inc(
+        sum(trade.quantity for trade in result.trades)
+    )
+    _update_orderbook_depth()
     _log_executed_trades(result)
     return Response(
         match_result_payload(result),
@@ -144,6 +174,7 @@ def cancel_order(request, order_id: UUID):
             }
         )
 
+    _update_orderbook_depth()
     return Response(
         {
             "order_id": str(canceled_order.order.order_id),
