@@ -11,6 +11,7 @@ from prometheus_client import REGISTRY
 from exchange import views
 from exchange.models import MarketDaily, Symbol, TraderProfile
 from exchange.orderbook.registry import books
+from exchange.simulation import reset_simulated_tickers_cache
 
 
 class HealthEndpointTests(APITestCase):
@@ -208,6 +209,9 @@ class OrderApiTests(APITestCase):
 class SymbolApiTests(APITestCase):
     latest_trade_date = date(2026, 8, 28)
 
+    def setUp(self) -> None:
+        reset_simulated_tickers_cache()
+
     @staticmethod
     def create_daily(
         *,
@@ -402,6 +406,9 @@ class TraderProfileApiTests(APITestCase):
 
 
 class SeedTradersCommandTests(APITestCase):
+    def setUp(self) -> None:
+        reset_simulated_tickers_cache()
+
     def test_seed_command_is_deterministic_and_idempotent(self):
         call_command("seed_traders", count=3, seed=42)
         fields = (
