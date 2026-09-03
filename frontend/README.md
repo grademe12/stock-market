@@ -8,7 +8,7 @@ backend로 요청을 전달한다.
 
 - backend liveness와 PostgreSQL readiness, 응답시간 표시
 - KRX 최신 거래일의 KOSPI 거래대금 상위 100종목 검색
-- `005930` 단일 matcher의 매수·매도 호가 polling
+- 시뮬 대상 종목의 매수·매도 호가 polling
 - 최대 50건의 최근 체결 polling
 - 기준정보만 있고 matcher가 없는 종목은 `REFERENCE ONLY`로 표시
 
@@ -81,5 +81,5 @@ npm audit --omit=dev
 - `GET /api/v1/health/`
 - `GET /api/v1/ready/`
 - `GET /api/v1/symbols/?q=&limit=20`
-- `GET /api/v1/books/005930/`
-- `GET /api/v1/trades/?symbol=005930&limit=50`
+- `GET /api/v1/books/{symbol}/`
+- `GET /api/v1/trades/?symbol={symbol}&limit=50`

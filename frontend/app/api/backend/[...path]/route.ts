@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const ALLOWED_PATHS = new Set(["health", "ready", "symbols", "books/005930", "trades"]);
+const ALLOWED_PATHS = new Set(["health", "ready", "symbols", "trades"]);
+const BOOK_PATH = /^books\/\d{6}$/;
 const UPSTREAM_TIMEOUT_MS = 5_000;
 
 type RouteContext = {
@@ -10,7 +11,7 @@ type RouteContext = {
 export async function GET(request: NextRequest, context: RouteContext) {
   const { path } = await context.params;
   const upstreamPath = path.join("/");
-  if (!ALLOWED_PATHS.has(upstreamPath)) {
+  if (!ALLOWED_PATHS.has(upstreamPath) && !BOOK_PATH.test(upstreamPath)) {
     return NextResponse.json({ detail: "backend route is not allowed" }, { status: 404 });
   }
 

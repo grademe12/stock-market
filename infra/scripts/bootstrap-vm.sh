@@ -69,6 +69,7 @@ DJANGO_SECRET_KEY=${django_secret_key}
 DJANGO_DEBUG=0
 DJANGO_ALLOWED_HOSTS=${django_allowed_hosts}
 TRADE_EXECUTION_LOG_ENABLED=0
+SIMULATION_SYMBOL_LIMIT=10
 EOF
 
 mv "${temporary_env}" "${ENV_FILE}"
