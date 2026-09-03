@@ -21,10 +21,9 @@ cp observability/.env.example observability/.env
 ```dotenv
 OBSERVABILITY_BIND_ADDRESS=100.x.y.z
 BACKEND_TAILSCALE_IP=100.x.y.z
-GRAFANA_ADMIN_PASSWORD=
 ```
 
-`GRAFANA_ADMIN_PASSWORD`에는 빈 값 대신 직접 생성한 강한 비밀번호를 입력한다.
+`observability/secrets/admin_credential` 파일을 만들고 직접 생성한 강한 비밀번호 한 줄을 저장한다. 이 디렉터리의 실제 secret 파일은 Git에서 제외된다. Grafana는 Docker secret으로 마운트된 파일을 읽는다.
 
 ## Run
 
