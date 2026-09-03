@@ -1,0 +1,64 @@
+services:
+  prometheus:
+    image: prom/prometheus:v3.5.5
+    restart: unless-stopped
+    cpus: 1.0
+    mem_limit: 1g
+    extra_hosts:
+      - "stock-market-gce:${BACKEND_TAILSCALE_IP:?set BACKEND_TAILSCALE_IP}"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --storage.tsdb.retention.size=10GB
+      - --web.enable-lifecycle
+    ports:
+      - "${OBSERVABILITY_BIND_ADDRESS:?set OBSERVABILITY_BIND_ADDRESS}:9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      - blackbox-exporter
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.28.0
+    restart: unless-stopped
+    cpus: 0.25
+    mem_limit: 128m
+    extra_hosts:
+      - "stock-market-gce:${BACKEND_TAILSCALE_IP:?set BACKEND_TAILSCALE_IP}"
+    volumes:
+      - ./blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+
+  grafana:
+    image: grafana/grafana:13.1.0
+    restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 768m
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+    ports:
+      - "${OBSERVABILITY_BIND_ADDRESS:?set OBSERVABILITY_BIND_ADDRESS}:3001:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    secrets:
+      - grafana_admin_password
+    depends_on:
+      - prometheus
+
+volumes:
+  prometheus-data:
+  grafana-data:
+
+secrets:
+  grafana_admin_password:
+    file: ${GRAFANA_ADMIN_PASSWORD_FILE:?set GRAFANA_ADMIN_PASSWORD_FILE}
