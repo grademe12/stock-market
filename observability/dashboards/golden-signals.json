@@ -41,8 +41,8 @@
       "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
       "id": 4,
       "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "showPercentChange": true, "textMode": "auto", "wideLayout": true },
-      "targets": [{ "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))", "refId": "A" }],
-      "title": "HTTP latency p99",
+      "targets": [{ "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{route=\"api/v1/orders/\",method=\"POST\"}[5m])))", "refId": "A" }],
+      "title": "Order POST latency p99",
       "type": "stat"
     },
     {
@@ -127,5 +127,5 @@
   "timezone": "browser",
   "title": "Stock Market Backend",
   "uid": "stock-market-backend",
-  "version": 1
+  "version": 2
 }
