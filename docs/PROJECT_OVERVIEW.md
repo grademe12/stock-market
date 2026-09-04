@@ -107,6 +107,7 @@ KRX 종목 풀은 아직 주문 API와 메모리 호가창에 연결하지 않�
 - [점진적 구현 계획](IMPLEMENTATION_PLAN.md)
 - [KRX KOSPI 상위 100개 적재](KRX_TOP100_REFERENCE_DATA_PLAN.md)
 - [k6 기준 부하 측정](LOAD_TEST_BASELINE.md)
+- [Day 1 부하·병목 보고서](../report/DAY1_LOAD_BOTTLENECK_REPORT.md)
 - [참여자 데모 실행 절차](DEMO_RUNBOOK.md)
 - [backend 사용 안내](../backend/README.md)
 - [participant-runner 사용 안내](../participant-runner/README.md)
