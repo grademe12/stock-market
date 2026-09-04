@@ -28,6 +28,7 @@ midpoint는 양쪽 호가가 있으면 두 최우선 호가의 평균, 한쪽만
 | `REQUEST_TIMEOUT_MS` | `5000` | HTTP 요청 timeout |
 | `RUNNER_STATUS_LOG_INTERVAL_TICKS` | `60` | 상태 요약 로그 출력 주기 |
 | `MAX_TRADERS` | unlimited | 활성 프로필 중 이 컨테이너가 실행할 최대 수 |
+| `HTTP_CONCURRENCY` | `16` | 한 틱에서 동시에 보낼 주문·취소 HTTP 수. 1이면 직렬, 최대 64 |
 | `TRADER_IDS` | all enabled | 쉼표로 구분한 특정 트레이더 ID |
 | `TRADER_STRATEGIES` | all strategies | 쉼표로 구분한 실행 전략. 주로 Make 명령이 자동 설정 |
 | `SCENARIO_PATH` | unset | 뉴스 fixture JSON 경로. `--scenario`가 있으면 CLI가 우선한다 |

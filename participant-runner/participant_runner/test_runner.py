@@ -1,3 +1,5 @@
+from threading import Lock
+from time import sleep
 from unittest import TestCase
 
 from exchange.orderbook import BookLevel, BookSnapshot, OrderSide
@@ -30,9 +32,12 @@ class FakeBackendClient:
         self.closed_order_ids: set[str] = set()
         self.book_requests: list[str] = []
         self.book_error: BackendApiError | None = None
+        self._lock = Lock()
+        self._next_order = 0
 
     def fetch_book(self, symbol: str) -> BookSnapshot:
-        self.book_requests.append(symbol)
+        with self._lock:
+            self.book_requests.append(symbol)
         if self.book_error is not None:
             raise self.book_error
         return BookSnapshot(
@@ -42,14 +47,36 @@ class FakeBackendClient:
         )
 
     def submit_order(self, intent: OrderIntent) -> SubmittedOrder:
-        self.submissions.append(intent)
-        return SubmittedOrder(order_id=f"order-{len(self.submissions)}", remaining_quantity=1)
+        with self._lock:
+            self.submissions.append(intent)
+            self._next_order += 1
+            order_id = f"order-{self._next_order}"
+        return SubmittedOrder(order_id=order_id, remaining_quantity=1)
 
     def cancel_order(self, order_id: str) -> CancellationResult:
         if order_id in self.closed_order_ids:
             return CancellationResult(status="ALREADY_CLOSED")
-        self.canceled_order_ids.append(order_id)
+        with self._lock:
+            self.canceled_order_ids.append(order_id)
         return CancellationResult(status="CANCELED")
+
+
+class ConcurrentBackendClient(FakeBackendClient):
+    def __init__(self) -> None:
+        super().__init__()
+        self.in_flight = 0
+        self.max_in_flight = 0
+
+    def submit_order(self, intent: OrderIntent) -> SubmittedOrder:
+        with self._lock:
+            self.in_flight += 1
+            self.max_in_flight = max(self.max_in_flight, self.in_flight)
+        try:
+            sleep(0.05)
+            return super().submit_order(intent)
+        finally:
+            with self._lock:
+                self.in_flight -= 1
 
 
 class StopAfterFirstWait:
@@ -200,3 +227,31 @@ class ParticipantRunnerTests(TestCase):
         self.assertIn("event=runner_status", logs.output[0])
         self.assertEqual(status.orders_canceled_total, 1)
         self.assertEqual(status.open_runner_orders, 0)
+
+    def test_http_concurrency_caps_in_flight_submits(self) -> None:
+        client = ConcurrentBackendClient()
+        intents = tuple(buy_intent() for _ in range(8))
+        runner = ParticipantRunner(
+            client,
+            (StaticParticipant(intents),),
+            http_concurrency=4,
+        )
+
+        status = runner.tick_once()
+
+        self.assertEqual(status.orders_submitted_total, 8)
+        self.assertEqual(len(client.submissions), 8)
+        self.assertEqual(client.max_in_flight, 4)
+
+    def test_serial_http_concurrency_keeps_one_in_flight(self) -> None:
+        client = ConcurrentBackendClient()
+        intents = tuple(buy_intent() for _ in range(3))
+        runner = ParticipantRunner(
+            client,
+            (StaticParticipant(intents),),
+            http_concurrency=1,
+        )
+
+        runner.tick_once()
+
+        self.assertEqual(client.max_in_flight, 1)
