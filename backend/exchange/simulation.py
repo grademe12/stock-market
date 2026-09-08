@@ -5,6 +5,8 @@ from django.db.models import Max
 from django.db.utils import OperationalError, ProgrammingError
 
 from exchange.models import MarketDaily
+from exchange.sharding import owned_tickers as slice_owned_tickers
+from exchange.sharding import shard_for_ticker
 
 FALLBACK_SYMBOL = "005930"
 
@@ -15,6 +17,14 @@ _cached_limit: int | None = None
 
 def simulation_symbol_limit() -> int:
     return settings.SIMULATION_SYMBOL_LIMIT
+
+
+def simulation_shard_count() -> int:
+    return settings.SIMULATION_SHARD_COUNT
+
+
+def simulation_shard_index() -> int:
+    return settings.SIMULATION_SHARD_INDEX
 
 
 def reset_simulated_tickers_cache() -> None:
@@ -65,6 +75,23 @@ def simulated_tickers() -> tuple[str, ...]:
 
 def is_simulated_symbol(ticker: str) -> bool:
     return ticker in simulated_tickers()
+
+
+def owned_tickers() -> tuple[str, ...]:
+    """Tickers this process will match. Rank-interleaved across shards."""
+    return slice_owned_tickers(
+        simulated_tickers(),
+        simulation_shard_index(),
+        simulation_shard_count(),
+    )
+
+
+def is_owned_symbol(ticker: str) -> bool:
+    return ticker in owned_tickers()
+
+
+def matcher_shard_for(ticker: str) -> int | None:
+    return shard_for_ticker(simulated_tickers(), ticker, simulation_shard_count())
 
 
 def preload_simulated_tickers() -> None:

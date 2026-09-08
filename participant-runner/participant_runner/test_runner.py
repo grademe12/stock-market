@@ -5,7 +5,12 @@ from unittest import TestCase
 from exchange.orderbook import BookLevel, BookSnapshot, OrderSide
 from exchange.participants import LiquidityProvider, OrderIntent, TraderSettings
 
-from participant_runner.client import BackendApiError, CancellationResult, SubmittedOrder
+from participant_runner.client import (
+    BackendApiError,
+    CancellationResult,
+    ShardedBackendClient,
+    SubmittedOrder,
+)
 from participant_runner.profiles import build_participants
 from participant_runner.runner import ParticipantRunner, run_until_stopped
 
@@ -53,7 +58,7 @@ class FakeBackendClient:
             order_id = f"order-{self._next_order}"
         return SubmittedOrder(order_id=order_id, remaining_quantity=1)
 
-    def cancel_order(self, order_id: str) -> CancellationResult:
+    def cancel_order(self, order_id: str, symbol: str = "") -> CancellationResult:
         if order_id in self.closed_order_ids:
             return CancellationResult(status="ALREADY_CLOSED")
         with self._lock:
@@ -255,3 +260,31 @@ class ParticipantRunnerTests(TestCase):
         runner.tick_once()
 
         self.assertEqual(client.max_in_flight, 1)
+
+    def test_sharded_client_sends_orders_to_the_owning_matcher(self) -> None:
+        shard_zero = FakeBackendClient()
+        shard_one = FakeBackendClient()
+        client = ShardedBackendClient(
+            (shard_zero, shard_one),
+            {"000660": 0, "005930": 1},
+        )
+        hynix = StaticParticipant(
+            (
+                OrderIntent(
+                    user_id="hynix",
+                    symbol="000660",
+                    side=OrderSide.BUY,
+                    price=250_000,
+                    quantity=1,
+                    order_ttl_ticks=1,
+                ),
+            )
+        )
+        hynix.symbol = "000660"
+        samsung = StaticParticipant((buy_intent(),))
+
+        runner = ParticipantRunner(client, (hynix, samsung), http_concurrency=1)
+        runner.tick_once()
+
+        self.assertEqual([intent.symbol for intent in shard_zero.submissions], ["000660"])
+        self.assertEqual([intent.symbol for intent in shard_one.submissions], ["005930"])

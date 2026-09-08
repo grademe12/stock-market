@@ -13,7 +13,12 @@ from rest_framework.response import Response
 from exchange.orderbook import OrderNotFoundError, OrderSide
 from exchange.orderbook.registry import books
 from exchange.models import MarketDaily, TraderProfile
-from exchange.simulation import FALLBACK_SYMBOL, is_simulated_symbol
+from exchange.simulation import (
+    FALLBACK_SYMBOL,
+    is_owned_symbol,
+    is_simulated_symbol,
+    matcher_shard_for,
+)
 from exchange.metrics import (
     ORDERBOOK_DEPTH,
     ORDERS_REJECTED,
@@ -81,6 +86,9 @@ def create_order(request):
     if not is_simulated_symbol(order.symbol):
         ORDERS_REJECTED.labels("unsupported_symbol").inc()
         raise ValidationError({"symbol": "symbol is not in the current simulation set"})
+    if not is_owned_symbol(order.symbol):
+        ORDERS_REJECTED.labels("wrong_shard").inc()
+        raise ValidationError({"symbol": "symbol is owned by another matcher shard"})
 
     ORDERS_SUBMITTED.labels(order.symbol, order.side.value).inc()
     result = books.submit(order)
@@ -155,6 +163,7 @@ def symbol_list(request):
                     "trading_value": record.trading_value,
                     "trading_value_rank": record.trading_value_rank,
                     "simulation_enabled": is_simulated_symbol(record.symbol_id),
+                    "matcher_shard": matcher_shard_for(record.symbol_id),
                 }
                 for record in records
             ],
@@ -164,6 +173,12 @@ def symbol_list(request):
 
 @api_view(["DELETE"])
 def cancel_order(request, order_id: UUID):
+    symbol = (request.query_params.get("symbol") or "").strip()
+    if symbol:
+        if not is_simulated_symbol(symbol):
+            raise ValidationError({"symbol": "symbol is not in the current simulation set"})
+        if not is_owned_symbol(symbol):
+            raise ValidationError({"symbol": "symbol is owned by another matcher shard"})
     try:
         canceled_order = books.cancel(order_id)
     except OrderNotFoundError:

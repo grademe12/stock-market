@@ -11,7 +11,7 @@ from prometheus_client import REGISTRY
 from exchange import views
 from exchange.models import MarketDaily, Symbol, TraderProfile
 from exchange.orderbook.registry import books
-from exchange.simulation import reset_simulated_tickers_cache
+from exchange.simulation import is_owned_symbol, reset_simulated_tickers_cache
 
 
 class HealthEndpointTests(APITestCase):
@@ -267,8 +267,10 @@ class SymbolApiTests(APITestCase):
         self.assertEqual(name_response.data["results"][0]["ticker"], "005930")
         self.assertEqual(name_response.data["results"][0]["close_price"], 70_000)
         self.assertTrue(name_response.data["results"][0]["simulation_enabled"])
+        self.assertEqual(name_response.data["results"][0]["matcher_shard"], 0)
         self.assertEqual(ticker_response.data["results"][0]["name"], "SK하이닉스")
         self.assertTrue(ticker_response.data["results"][0]["simulation_enabled"])
+        self.assertEqual(ticker_response.data["results"][0]["matcher_shard"], 0)
 
     @override_settings(SIMULATION_SYMBOL_LIMIT=1)
     def test_simulation_limit_enables_only_the_top_ranked_symbol(self):
@@ -454,3 +456,72 @@ class SeedTradersCommandTests(APITestCase):
 
         self.assertIn("000660", str(raised.exception))
         self.assertEqual(TraderProfile.objects.count(), 0)
+
+
+class MatcherShardApiTests(APITestCase):
+    latest_trade_date = date(2026, 8, 28)
+
+    def setUp(self) -> None:
+        books.reset()
+        Symbol.objects.update_or_create(
+            ticker="000660",
+            defaults={"name": "SK하이닉스", "market": Symbol.Market.KOSPI},
+        )
+        Symbol.objects.update_or_create(
+            ticker="005930",
+            defaults={"name": "삼성전자", "market": Symbol.Market.KOSPI},
+        )
+        for ticker, rank in (("000660", 1), ("005930", 2)):
+            MarketDaily.objects.create(
+                symbol_id=ticker,
+                trade_date=self.latest_trade_date,
+                close_price=70_000,
+                volume=1_000,
+                trading_value=1_000_000 - rank,
+                trading_value_rank=rank,
+                source_payload={},
+            )
+
+    def submit(self, symbol: str):
+        return self.client.post(
+            reverse("order-create"),
+            {
+                "user_id": "alice",
+                "symbol": symbol,
+                "side": "BUY",
+                "price": 70_000,
+                "qty": 1,
+            },
+            format="json",
+        )
+
+    @override_settings(SIMULATION_SHARD_COUNT=2, SIMULATION_SHARD_INDEX=0)
+    def test_even_rank_positions_stay_on_shard_zero(self) -> None:
+        books.reset()
+        self.assertTrue(is_owned_symbol("000660"))
+        self.assertFalse(is_owned_symbol("005930"))
+
+        owned = self.submit("000660")
+        foreign = self.submit("005930")
+        listing = self.client.get(reverse("symbol-list"), {"limit": 10})
+
+        self.assertEqual(owned.status_code, 201)
+        self.assertEqual(foreign.status_code, 400)
+        self.assertIn("symbol", foreign.data)
+        self.assertEqual(listing.data["results"][0]["matcher_shard"], 0)
+        self.assertEqual(listing.data["results"][1]["matcher_shard"], 1)
+        self.assertTrue(listing.data["results"][0]["simulation_enabled"])
+        self.assertTrue(listing.data["results"][1]["simulation_enabled"])
+
+    @override_settings(SIMULATION_SHARD_COUNT=2, SIMULATION_SHARD_INDEX=1)
+    def test_cancel_with_foreign_symbol_does_not_look_like_a_fill(self) -> None:
+        books.reset()
+        created = self.submit("005930")
+        self.assertEqual(created.status_code, 201)
+
+        response = self.client.delete(
+            reverse("order-cancel", args=[created.data["order_id"]]) + "?symbol=000660",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("symbol", response.data)

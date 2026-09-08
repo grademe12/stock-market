@@ -18,12 +18,13 @@ class BackendClient(Protocol):
 
     def submit_order(self, intent: OrderIntent) -> SubmittedOrder: ...
 
-    def cancel_order(self, order_id: str) -> CancellationResult: ...
+    def cancel_order(self, order_id: str, symbol: str = "") -> CancellationResult: ...
 
 
 @dataclass(frozen=True, slots=True)
 class TrackedOrder:
     order_id: str
+    symbol: str
     submitted_tick: int
     expires_after_ticks: int
 
@@ -145,6 +146,7 @@ class ParticipantRunner:
             if submitted_order.remaining_quantity:
                 self._outstanding_orders[submitted_order.order_id] = TrackedOrder(
                     order_id=submitted_order.order_id,
+                    symbol=intent.symbol,
                     submitted_tick=self._tick,
                     expires_after_ticks=intent.order_ttl_ticks or 1,
                 )
@@ -153,7 +155,9 @@ class ParticipantRunner:
     def cancel_all_open_orders(self) -> RunnerStatus:
         with self._lock:
             order_ids = tuple(self._outstanding_orders)
-        self._run_http([lambda order_id=order_id: self._cancel(order_id) for order_id in order_ids])
+        self._run_http(
+            [lambda order_id=order_id: self._cancel(order_id) for order_id in order_ids]
+        )
         return self.status()
 
     def status(self) -> RunnerStatus:
@@ -207,8 +211,11 @@ class ParticipantRunner:
         )
 
     def _cancel(self, order_id: str) -> None:
+        with self._lock:
+            tracked = self._outstanding_orders.get(order_id)
+            symbol = tracked.symbol if tracked else ""
         try:
-            result = self._client.cancel_order(order_id)
+            result = self._client.cancel_order(order_id, symbol)
         except BackendApiError as exc:
             with self._lock:
                 self._request_failures += 1

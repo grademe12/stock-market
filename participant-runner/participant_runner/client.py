@@ -70,8 +70,26 @@ class BackendApiClient:
         except (KeyError, TypeError, ValueError) as exc:
             raise BackendApiError(None, "order response has an invalid shape") from exc
 
-    def cancel_order(self, order_id: str) -> CancellationResult:
-        payload = self._request("DELETE", f"/api/v1/orders/{order_id}/")
+    def fetch_matcher_shards(self) -> dict[str, int]:
+        payload = self._request("GET", "/api/v1/symbols/?limit=100")
+        if not isinstance(payload, dict) or not isinstance(payload.get("results"), list):
+            raise BackendApiError(None, "symbol response must include results")
+        shards: dict[str, int] = {}
+        for item in payload["results"]:
+            if not isinstance(item, dict) or not item.get("simulation_enabled"):
+                continue
+            ticker = str(item["ticker"])
+            raw_shard = item.get("matcher_shard")
+            if raw_shard is None:
+                continue
+            shards[ticker] = int(raw_shard)
+        return shards
+
+    def cancel_order(self, order_id: str, symbol: str = "") -> CancellationResult:
+        path = f"/api/v1/orders/{order_id}/"
+        if symbol:
+            path = f"{path}?symbol={symbol}"
+        payload = self._request("DELETE", path)
         try:
             result = CancellationResult(status=str(payload["status"]))
         except (KeyError, TypeError) as exc:
@@ -114,3 +132,39 @@ class BackendApiClient:
                 raise ValueError("book level values must be positive")
             levels.append(BookLevel(price=price, quantity=quantity))
         return tuple(levels)
+
+
+class ShardedBackendClient:
+    """Send book, order, and cancel calls to the matcher that owns the symbol."""
+
+    def __init__(
+        self,
+        clients: tuple[BackendApiClient, ...],
+        shards: dict[str, int],
+    ) -> None:
+        if not clients:
+            raise BackendApiError(None, "at least one backend shard URL is required")
+        self._clients = clients
+        self._shards = shards
+
+    def fetch_trader_profiles(self) -> list[dict[str, Any]]:
+        return self._clients[0].fetch_trader_profiles()
+
+    def fetch_book(self, symbol: str) -> BookSnapshot:
+        return self._client_for(symbol).fetch_book(symbol)
+
+    def submit_order(self, intent: OrderIntent) -> SubmittedOrder:
+        return self._client_for(intent.symbol).submit_order(intent)
+
+    def cancel_order(self, order_id: str, symbol: str = "") -> CancellationResult:
+        if not symbol:
+            raise BackendApiError(None, "cancel requires a symbol when shards are enabled")
+        return self._client_for(symbol).cancel_order(order_id, symbol)
+
+    def _client_for(self, symbol: str) -> BackendApiClient:
+        shard = self._shards.get(symbol)
+        if shard is None:
+            raise BackendApiError(None, f"no matcher shard for {symbol}")
+        if shard < 0 or shard >= len(self._clients):
+            raise BackendApiError(None, f"matcher shard {shard} is not configured")
+        return self._clients[shard]

@@ -21,10 +21,10 @@ make backend-run
 
 ## Container run
 
-프로젝트 루트에서 실행합니다. backend는 Gunicorn **worker 1개**로 실행한다. 현재 호가창은 프로세스 메모리에 있으므로 worker를 늘리면 호가창이 분리되기 때문이다. `--threads 4`는 같은 프로세스 안에서 HTTP 요청을 처리할 수 있게 한다.
+프로젝트 루트에서 실행합니다. backend 컨테이너는 Gunicorn **worker 1개**로 실행한다. 같은 종목 호가창을 두 워커가 나누면 체결이 어긋나기 때문이다. 코어 2개를 쓸 때는 `--workers`를 늘리지 않고 컨테이너를 2개 띄운 뒤 종목을 샤드한다. `--threads 4`는 같은 프로세스 안에서 HTTP 요청을 처리할 수 있게 한다.
 
 ```bash
-docker compose up --build backend
+docker compose up --build backend backend-1
 # 또는 make container-backend-up
 ```
 
@@ -69,13 +69,14 @@ make demo-seed TRADER_STRATEGY=event_reactive TRADER_COUNT=50
 ## Current API
 
 최신 KRX 거래일의 거래대금 상위 N종목을 메모리 호가창으로 처리합니다. N은
-`SIMULATION_SYMBOL_LIMIT`(기본 10, 1~100)입니다. 참조 데이터가 없으면 개발용
-`005930`만 허용합니다.
+`SIMULATION_SYMBOL_LIMIT`(기본 10, 1~100)입니다. 프로세스 2개로 나눌 때는
+`SIMULATION_SHARD_COUNT=2`와 `SIMULATION_SHARD_INDEX=0|1`로 거래대금 순위를
+교차 분배합니다. 참조 데이터가 없으면 개발용 `005930`만 허용합니다.
 
 | Endpoint | 설명 |
 |---|---|
 | `POST /api/v1/orders/` | 지정가 주문 제출·체결 결과 조회 |
-| `DELETE /api/v1/orders/{order_id}/` | 미체결 잔량 주문 취소 |
+| `DELETE /api/v1/orders/{order_id}/` | 미체결 잔량 주문 취소. 샤드 라우팅 시 `?symbol=` |
 | `GET /api/v1/books/{symbol}/` | 시뮬 대상 종목의 가격별 호가 잔량 조회 |
 | `GET /api/v1/trades/?symbol={symbol}&limit=50` | 해당 종목의 최신 체결 내역 조회 |
 | `GET /api/v1/symbols/?q=삼성&limit=20` | 최신 KRX 상위 100종목 검색 |
@@ -90,7 +91,7 @@ make demo-seed TRADER_STRATEGY=event_reactive TRADER_COUNT=50
 
 최근 체결 API는 matcher가 종목별로 메모리에 보관하는 최대 200건을 최신순으로 반환한다. `limit`은 기본 50, 최대 200이다. 체결에는 UTC `executed_at`이 포함되며 backend 재시작 시 호가창과 함께 초기화된다.
 
-종목 검색 API는 PostgreSQL에 적재된 가장 최근 거래일의 KOSPI 거래대금 상위 100종목을 종목 코드 또는 이름으로 검색한다. `q`를 생략하면 거래대금 순위대로 반환하며 `limit`은 기본 20, 최대 100이다. `simulation_enabled`는 해당 종목의 실시간 호가·주문 지원 여부를 나타낸다. 최신 거래일 상위 `SIMULATION_SYMBOL_LIMIT`개만 `true`다.
+종목 검색 API는 PostgreSQL에 적재된 가장 최근 거래일의 KOSPI 거래대금 상위 100종목을 종목 코드 또는 이름으로 검색한다. `q`를 생략하면 거래대금 순위대로 반환하며 `limit`은 기본 20, 최대 100이다. `simulation_enabled`는 해당 종목의 실시간 호가·주문 지원 여부를 나타낸다. 최신 거래일 상위 `SIMULATION_SYMBOL_LIMIT`개만 `true`다. `matcher_shard`는 그 종목을 체결하는 프로세스 번호다.
 
 트레이더 설정은 PostgreSQL의 `TraderProfile`로 보관하며, 프론트엔드가 위 API를 통해 그대로 편집할 수 있다. 설정에는 이름·가상 사용자 ID·활성화 여부·종목·기준가·가격 단위·가격 오프셋·수량 범위·주문 TTL·개별 실행 주기·seed가 포함된다. 현재 지원 전략은 `noise`, `momentum`, `mean_reversion`, `liquidity_provider`, `event_reactive`이고 종목은 시뮬 대상 집합이다. `event_reactive`는 이벤트가 없으면 주문하지 않는다.
 
@@ -100,7 +101,7 @@ make demo-seed TRADER_STRATEGY=event_reactive TRADER_COUNT=50
 
 Compose 환경은 KRX 참조 데이터와 트레이더 설정을 PostgreSQL에 저장한다. 주문·체결과 호가창은 아직 메모리에만 있으며 backend 재시작 시 초기화된다. 로컬 `make backend-test`는 빠른 단위 테스트를 위해 SQLite를 사용한다.
 
-`DATABASE_ENGINE`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`, `KRX_API_KEY`, `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`, `TRADE_EXECUTION_LOG_ENABLED`, `SIMULATION_SYMBOL_LIMIT`는 환경 변수로 설정할 수 있습니다. 기본값은 로컬 개발 전용이며 배포 환경에서는 사용하지 않습니다.
+`DATABASE_ENGINE`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`, `KRX_API_KEY`, `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`, `TRADE_EXECUTION_LOG_ENABLED`, `SIMULATION_SYMBOL_LIMIT`, `SIMULATION_SHARD_COUNT`, `SIMULATION_SHARD_INDEX`, `PORT`는 환경 변수로 설정할 수 있습니다. 기본값은 로컬 개발 전용이며 배포 환경에서는 사용하지 않습니다.
 
 ## KRX reference import
 

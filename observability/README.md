@@ -4,7 +4,7 @@ Prometheus and Grafana run on the mini PC and reach the GCE backend over Tailsca
 
 ## Components
 
-- Prometheus scrapes Django `/metrics/` every 15 seconds and retains at most 30 days or 10 GB.
+- Prometheus scrapes each matcher shard `/metrics/` every 15 seconds (`:8000`, `:8001`) and retains at most 30 days or 10 GB.
 - Blackbox exporter probes `/api/v1/ready/`, including the backend database check.
 - Grafana provisions the Prometheus datasource and the `Stock Market Backend` dashboard automatically.
 

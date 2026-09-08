@@ -34,6 +34,23 @@ class RunnerConfigTests(TestCase):
             config = RunnerConfig.from_environment()
 
         self.assertEqual(config.http_concurrency, HTTP_CONCURRENCY_DEFAULT)
+        self.assertEqual(config.backend_shard_urls, ("http://127.0.0.1:8000",))
+
+    def test_reads_backend_shard_urls(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "BACKEND_BASE_URL": "http://127.0.0.1:8000",
+                "BACKEND_SHARD_URLS": "http://backend:8000, http://backend-1:8000",
+            },
+            clear=True,
+        ):
+            config = RunnerConfig.from_environment()
+
+        self.assertEqual(
+            config.backend_shard_urls,
+            ("http://backend:8000", "http://backend-1:8000"),
+        )
 
     def test_rejects_http_concurrency_outside_range(self) -> None:
         with patch.dict(os.environ, {"HTTP_CONCURRENCY": "0"}, clear=True):
