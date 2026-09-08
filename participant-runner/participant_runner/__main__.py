@@ -43,8 +43,17 @@ def main() -> int:
         logging.error("runner startup failed: %s", exc)
         return 1
 
-    logging.info("loaded %s participant(s)", len(participants))
-    runner = ParticipantRunner(client, participants, coordinator=coordinator)
+    logging.info(
+        "loaded %s participant(s) http_concurrency=%s",
+        len(participants),
+        config.http_concurrency,
+    )
+    runner = ParticipantRunner(
+        client,
+        participants,
+        coordinator=coordinator,
+        http_concurrency=config.http_concurrency,
+    )
     if arguments.once:
         runner.tick_once()
         logging.info("runner status: %s", asdict(runner.cancel_all_open_orders()))

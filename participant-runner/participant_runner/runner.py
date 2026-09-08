@@ -1,12 +1,15 @@
+from collections.abc import Callable, Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 import logging
-from threading import Event
+from threading import Event, Lock
 from typing import Protocol
 
 from exchange.orderbook import BookSnapshot
 from exchange.participants.types import OrderIntent, TradingParticipant
 
 from participant_runner.client import BackendApiError, CancellationResult, SubmittedOrder
+from participant_runner.config import HTTP_CONCURRENCY_DEFAULT
 from participant_runner.coordinator import CoordinatorStatus, EventCoordinator
 
 
@@ -51,10 +54,15 @@ class ParticipantRunner:
         client: BackendClient,
         participants: tuple[TradingParticipant, ...],
         coordinator: EventCoordinator | None = None,
+        http_concurrency: int = HTTP_CONCURRENCY_DEFAULT,
     ) -> None:
+        if http_concurrency < 1:
+            raise ValueError("http_concurrency must be at least 1")
         self._client = client
         self._participants = participants
         self._coordinator = coordinator
+        self._http_concurrency = http_concurrency
+        self._lock = Lock()
         self._tick = 0
         self._outstanding_orders: dict[str, TrackedOrder] = {}
         self._orders_submitted = 0
@@ -68,13 +76,18 @@ class ParticipantRunner:
         self._expire_orders()
 
         snapshots = self._fetch_snapshots()
+        intents: list[OrderIntent] = []
         for participant in self._participants:
             snapshot = snapshots.get(participant.symbol)
             if snapshot is None:
                 continue
-            for intent in participant.next_intents(self._tick, snapshot):
-                submitted = self._submit(intent)
-                self._notify_coordinator_after_submit(intent, submitted)
+            intents.extend(participant.next_intents(self._tick, snapshot))
+
+        submitted_flags = self._run_http(
+            [lambda intent=intent: self._submit(intent) for intent in intents]
+        )
+        for intent, submitted in zip(intents, submitted_flags, strict=True):
+            self._notify_coordinator_after_submit(intent, bool(submitted))
 
         return self.status()
 
@@ -100,41 +113,64 @@ class ParticipantRunner:
             try:
                 snapshots[symbol] = self._client.fetch_book(symbol)
             except BackendApiError as exc:
-                self._request_failures += 1
+                with self._lock:
+                    self._request_failures += 1
                 logging.warning("book request failed for %s: %s", symbol, exc)
         return snapshots
+
+    def _run_http(self, jobs: Sequence[Callable[[], object]]) -> list[object]:
+        if not jobs:
+            return []
+        workers = min(self._http_concurrency, len(jobs))
+        if workers == 1:
+            return [job() for job in jobs]
+        results: list[object | None] = [None] * len(jobs)
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {pool.submit(job): index for index, job in enumerate(jobs)}
+            for future in as_completed(futures):
+                results[futures[future]] = future.result()
+        return list(results)
 
     def _submit(self, intent: OrderIntent) -> bool:
         try:
             submitted_order = self._client.submit_order(intent)
         except BackendApiError as exc:
-            self._request_failures += 1
+            with self._lock:
+                self._request_failures += 1
             logging.warning("order submission failed: %s", exc)
             return False
 
-        self._orders_submitted += 1
-        if submitted_order.remaining_quantity:
-            self._outstanding_orders[submitted_order.order_id] = TrackedOrder(
-                order_id=submitted_order.order_id,
-                submitted_tick=self._tick,
-                expires_after_ticks=intent.order_ttl_ticks or 1,
-            )
+        with self._lock:
+            self._orders_submitted += 1
+            if submitted_order.remaining_quantity:
+                self._outstanding_orders[submitted_order.order_id] = TrackedOrder(
+                    order_id=submitted_order.order_id,
+                    submitted_tick=self._tick,
+                    expires_after_ticks=intent.order_ttl_ticks or 1,
+                )
         return True
 
     def cancel_all_open_orders(self) -> RunnerStatus:
-        for order_id in tuple(self._outstanding_orders):
-            self._cancel(order_id)
+        with self._lock:
+            order_ids = tuple(self._outstanding_orders)
+        self._run_http([lambda order_id=order_id: self._cancel(order_id) for order_id in order_ids])
         return self.status()
 
     def status(self) -> RunnerStatus:
         event_status = self._coordinator_status()
+        with self._lock:
+            open_runner_orders = len(self._outstanding_orders)
+            orders_submitted_total = self._orders_submitted
+            orders_canceled_total = self._orders_canceled
+            orders_already_closed_total = self._orders_already_closed
+            request_failures_total = self._request_failures
         return RunnerStatus(
             ticks_total=self._tick,
-            orders_submitted_total=self._orders_submitted,
-            orders_canceled_total=self._orders_canceled,
-            orders_already_closed_total=self._orders_already_closed,
-            request_failures_total=self._request_failures,
-            open_runner_orders=len(self._outstanding_orders),
+            orders_submitted_total=orders_submitted_total,
+            orders_canceled_total=orders_canceled_total,
+            orders_already_closed_total=orders_already_closed_total,
+            request_failures_total=request_failures_total,
+            open_runner_orders=open_runner_orders,
             events_received_total=event_status.events_received_total,
             events_deduplicated_total=event_status.events_deduplicated_total,
             dormant_traders_total=event_status.dormant_traders_total,
@@ -160,22 +196,30 @@ class ParticipantRunner:
         return self._coordinator.status()
 
     def _expire_orders(self) -> None:
-        for order_id, tracked_order in tuple(self._outstanding_orders.items()):
-            if self._tick - tracked_order.submitted_tick >= tracked_order.expires_after_ticks:
-                self._cancel(order_id)
+        with self._lock:
+            expired_ids = tuple(
+                order_id
+                for order_id, tracked_order in self._outstanding_orders.items()
+                if self._tick - tracked_order.submitted_tick >= tracked_order.expires_after_ticks
+            )
+        self._run_http(
+            [lambda order_id=order_id: self._cancel(order_id) for order_id in expired_ids]
+        )
 
     def _cancel(self, order_id: str) -> None:
         try:
             result = self._client.cancel_order(order_id)
+        except BackendApiError as exc:
+            with self._lock:
+                self._request_failures += 1
+            logging.warning("order cancellation failed: %s", exc)
+            return
+        with self._lock:
             if result.status == "ALREADY_CLOSED":
                 self._orders_already_closed += 1
             else:
                 self._orders_canceled += 1
-        except BackendApiError as exc:
-            self._request_failures += 1
-            logging.warning("order cancellation failed: %s", exc)
-            return
-        self._outstanding_orders.pop(order_id, None)
+            self._outstanding_orders.pop(order_id, None)
 
 
 def run_until_stopped(

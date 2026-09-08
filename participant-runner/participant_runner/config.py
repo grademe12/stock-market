@@ -9,7 +9,16 @@ class ConfigurationError(ValueError):
     pass
 
 
-def _positive_int(name: str, default: int | None = None) -> int | None:
+HTTP_CONCURRENCY_DEFAULT = 16
+HTTP_CONCURRENCY_MAXIMUM = 64
+
+
+def _positive_int(
+    name: str,
+    default: int | None = None,
+    *,
+    maximum: int | None = None,
+) -> int | None:
     raw_value = os.getenv(name)
     if raw_value is None or not raw_value.strip():
         return default
@@ -19,6 +28,8 @@ def _positive_int(name: str, default: int | None = None) -> int | None:
         raise ConfigurationError(f"{name} must be an integer") from exc
     if value < 1:
         raise ConfigurationError(f"{name} must be at least 1")
+    if maximum is not None and value > maximum:
+        raise ConfigurationError(f"{name} must be between 1 and {maximum}")
     return value
 
 
@@ -31,6 +42,7 @@ class RunnerConfig:
     request_timeout_ms: int
     status_log_interval_ticks: int
     max_traders: int | None
+    http_concurrency: int
     trader_ids: tuple[str, ...]
     trader_strategies: tuple[str, ...]
     scenario_path: Path | None
@@ -70,6 +82,12 @@ class RunnerConfig:
                 _positive_int("RUNNER_STATUS_LOG_INTERVAL_TICKS", 60) or 60
             ),
             max_traders=_positive_int("MAX_TRADERS"),
+            http_concurrency=_positive_int(
+                "HTTP_CONCURRENCY",
+                HTTP_CONCURRENCY_DEFAULT,
+                maximum=HTTP_CONCURRENCY_MAXIMUM,
+            )
+            or HTTP_CONCURRENCY_DEFAULT,
             trader_ids=trader_ids,
             trader_strategies=trader_strategies,
             scenario_path=Path(raw_scenario) if raw_scenario else None,
