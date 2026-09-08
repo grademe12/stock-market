@@ -38,6 +38,7 @@ class RunnerConfig:
     """Container/runtime settings, separate from individual trader profiles."""
 
     backend_base_url: str
+    backend_shard_urls: tuple[str, ...]
     tick_interval_ms: int
     request_timeout_ms: int
     status_log_interval_ticks: int
@@ -52,6 +53,24 @@ class RunnerConfig:
         backend_base_url = os.getenv("BACKEND_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
         if not backend_base_url.startswith(("http://", "https://")):
             raise ConfigurationError("BACKEND_BASE_URL must start with http:// or https://")
+        raw_shard_urls = os.getenv("BACKEND_SHARD_URLS", "").strip()
+        if raw_shard_urls:
+            backend_shard_urls = tuple(
+                url.strip().rstrip("/")
+                for url in raw_shard_urls.split(",")
+                if url.strip()
+            )
+        else:
+            backend_shard_urls = (backend_base_url,)
+        if not backend_shard_urls:
+            raise ConfigurationError("BACKEND_SHARD_URLS must contain at least one URL")
+        if len(set(backend_shard_urls)) != len(backend_shard_urls):
+            raise ConfigurationError("BACKEND_SHARD_URLS must not contain duplicates")
+        for url in backend_shard_urls:
+            if not url.startswith(("http://", "https://")):
+                raise ConfigurationError(
+                    "BACKEND_SHARD_URLS must start with http:// or https://"
+                )
 
         trader_ids = tuple(
             trader_id.strip()
@@ -76,6 +95,7 @@ class RunnerConfig:
         raw_scenario = os.getenv("SCENARIO_PATH", "").strip()
         return cls(
             backend_base_url=backend_base_url,
+            backend_shard_urls=backend_shard_urls,
             tick_interval_ms=_positive_int("TICK_INTERVAL_MS", 1_000) or 1_000,
             request_timeout_ms=_positive_int("REQUEST_TIMEOUT_MS", 5_000) or 5_000,
             status_log_interval_ticks=(

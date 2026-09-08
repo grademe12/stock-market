@@ -5,7 +5,7 @@ from pathlib import Path
 import signal
 from threading import Event
 
-from participant_runner.client import BackendApiClient, BackendApiError
+from participant_runner.client import BackendApiClient, BackendApiError, ShardedBackendClient
 from participant_runner.config import ConfigurationError, RunnerConfig
 from participant_runner.coordinator import EventCoordinator
 from participant_runner.profiles import InvalidTraderProfileError, build_participants
@@ -26,7 +26,14 @@ def main() -> int:
 
     try:
         config = RunnerConfig.from_environment()
-        client = BackendApiClient(config.backend_base_url, config.request_timeout_ms)
+        clients = tuple(
+            BackendApiClient(url, config.request_timeout_ms)
+            for url in config.backend_shard_urls
+        )
+        if len(clients) == 1:
+            client: BackendApiClient | ShardedBackendClient = clients[0]
+        else:
+            client = ShardedBackendClient(clients, clients[0].fetch_matcher_shards())
         participants = build_participants(
             client.fetch_trader_profiles(),
             trader_ids=config.trader_ids,
@@ -44,9 +51,10 @@ def main() -> int:
         return 1
 
     logging.info(
-        "loaded %s participant(s) http_concurrency=%s",
+        "loaded %s participant(s) http_concurrency=%s shards=%s",
         len(participants),
         config.http_concurrency,
+        ",".join(config.backend_shard_urls),
     )
     runner = ParticipantRunner(
         client,

@@ -3,7 +3,7 @@ from uuid import UUID
 
 from exchange.orderbook.book import OrderBook
 from exchange.orderbook.types import MatchResult, OpenOrder, Order, OrderNotFoundError
-from exchange.simulation import is_simulated_symbol, reset_simulated_tickers_cache
+from exchange.simulation import is_owned_symbol, reset_simulated_tickers_cache
 
 
 class OrderBookRegistry:
@@ -21,7 +21,7 @@ class OrderBookRegistry:
             self._order_symbols.clear()
 
     def get(self, symbol: str) -> OrderBook | None:
-        if not is_simulated_symbol(symbol):
+        if not is_owned_symbol(symbol):
             return None
         with self._lock:
             book = self._books.get(symbol)

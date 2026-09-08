@@ -10,7 +10,7 @@
 
 - `backend/`: Django/DRF 주문 API와 단일 프로세스 메모리 호가창
 - `participant-runner/`: backend에 HTTP 주문을 보내는 별도 시장참여자 프로세스. 추후 다양한 알고리즘을 사용하는 시장참여자로 확장한다.
-- 현재 matcher는 메모리 상태를 공유해야 하므로 backend active replica는 1개만 허용한다.
+- 현재 matcher는 프로세스 메모리 호가창을 쓰므로 같은 종목의 active replica는 1개만 허용한다. 코어를 나누려면 종목 샤드마다 프로세스 1개다.
 - Compose backend의 트레이더 프로필과 KRX 참조 데이터는 PostgreSQL에 저장한다. 주문·체결·잔고는 아직 영속화하지 않는다.
 
 ## 작업 원칙

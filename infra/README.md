@@ -157,12 +157,14 @@ workflow는 `main`에서만 배포 토큰을 받을 수 있다. backend·runner 
 검증 후 이미지를 push하고 IAP SSH로 배포한다. VM은 자신의 service account로
 Artifact Registry에 로그인한다.
 
-배포는 기존 컨테이너를 `stock-market-backend-previous`로 보존한다. 새 컨테이너의
-`/api/v1/ready/`가 DB 연결까지 확인한 후에만 이전 컨테이너를 삭제하며, 실패하면
-이전 컨테이너를 복구한다. 메모리 호가창 특성상 배포 중 주문 상태는 유지되지 않는다.
+배포는 샤드마다 `stock-market-backend-0`, `stock-market-backend-1`을 띄우고
+이전 컨테이너를 `*-previous`로 보존한다. 두 프로세스의 `/api/v1/ready/`가 확인된
+뒤에만 이전 컨테이너를 삭제하며, 실패하면 복구한다. 메모리 호가창 특성상 배포 중
+주문 상태는 유지되지 않는다.
 
 runner의 endpoint:
 
 ```bash
 BACKEND_BASE_URL=http://stock-market-gce:8000
+BACKEND_SHARD_URLS=http://stock-market-gce:8000,http://stock-market-gce:8001
 ```

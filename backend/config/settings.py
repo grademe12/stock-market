@@ -29,6 +29,20 @@ SIMULATION_SYMBOL_LIMIT = _env_int(
     minimum=1,
     maximum=100,
 )
+SIMULATION_SHARD_COUNT = _env_int(
+    "SIMULATION_SHARD_COUNT",
+    1,
+    minimum=1,
+    maximum=8,
+)
+SIMULATION_SHARD_INDEX = _env_int(
+    "SIMULATION_SHARD_INDEX",
+    0,
+    minimum=0,
+    maximum=7,
+)
+if SIMULATION_SHARD_INDEX >= SIMULATION_SHARD_COUNT:
+    raise RuntimeError("SIMULATION_SHARD_INDEX must be less than SIMULATION_SHARD_COUNT")
 ALLOWED_HOSTS = [
     host.strip()
     for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
