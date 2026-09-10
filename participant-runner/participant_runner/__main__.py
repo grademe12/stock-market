@@ -30,15 +30,20 @@ def main() -> int:
             BackendApiClient(url, config.request_timeout_ms)
             for url in config.backend_shard_urls
         )
+        symbol_shards: dict[str, int] = {}
+        if config.runner_shard_index is not None or len(clients) > 1:
+            symbol_shards = clients[0].fetch_matcher_shards()
         if len(clients) == 1:
             client: BackendApiClient | ShardedBackendClient = clients[0]
         else:
-            client = ShardedBackendClient(clients, clients[0].fetch_matcher_shards())
+            client = ShardedBackendClient(clients, symbol_shards)
         participants = build_participants(
             client.fetch_trader_profiles(),
             trader_ids=config.trader_ids,
             trader_strategies=config.trader_strategies,
             max_traders=config.max_traders,
+            runner_shard_index=config.runner_shard_index,
+            symbol_shards=symbol_shards,
         )
         coordinator = _build_coordinator(arguments.scenario, config, participants)
     except (
@@ -50,11 +55,15 @@ def main() -> int:
         logging.error("runner startup failed: %s", exc)
         return 1
 
+    symbols = sorted({participant.symbol for participant in participants})
     logging.info(
-        "loaded %s participant(s) http_concurrency=%s shards=%s",
+        "loaded %s participant(s) http_concurrency=%s backend_shards=%s "
+        "runner_shard=%s symbols=%s",
         len(participants),
         config.http_concurrency,
         ",".join(config.backend_shard_urls),
+        config.runner_shard_index if config.runner_shard_index is not None else "all",
+        ",".join(symbols) or "-",
     )
     runner = ParticipantRunner(
         client,

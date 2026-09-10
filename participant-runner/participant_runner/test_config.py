@@ -60,6 +60,23 @@ class RunnerConfigTests(TestCase):
             with self.assertRaisesRegex(ConfigurationError, "HTTP_CONCURRENCY"):
                 RunnerConfig.from_environment()
 
+    def test_reads_runner_shard_index(self) -> None:
+        with patch.dict(os.environ, {"RUNNER_SHARD_INDEX": "0"}, clear=True):
+            config = RunnerConfig.from_environment()
+
+        self.assertEqual(config.runner_shard_index, 0)
+
+    def test_runner_shard_index_defaults_when_unset(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            config = RunnerConfig.from_environment()
+
+        self.assertIsNone(config.runner_shard_index)
+
+    def test_rejects_negative_runner_shard_index(self) -> None:
+        with patch.dict(os.environ, {"RUNNER_SHARD_INDEX": "-1"}, clear=True):
+            with self.assertRaisesRegex(ConfigurationError, "RUNNER_SHARD_INDEX"):
+                RunnerConfig.from_environment()
+
     def test_rejects_unsupported_strategy_filter(self) -> None:
         with patch.dict(os.environ, {"TRADER_STRATEGIES": "unknown"}, clear=True):
             with self.assertRaisesRegex(

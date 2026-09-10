@@ -31,6 +31,7 @@ midpoint는 양쪽 호가가 있으면 두 최우선 호가의 평균, 한쪽만
 | `BACKEND_SHARD_URLS` | `BACKEND_BASE_URL` | 매처 샤드 URL 목록. `http://host:8000,http://host:8001` |
 | `TRADER_IDS` | all enabled | 쉼표로 구분한 특정 트레이더 ID |
 | `TRADER_STRATEGIES` | all strategies | 쉼표로 구분한 실행 전략. 주로 Make 명령이 자동 설정 |
+| `RUNNER_SHARD_INDEX` | all symbols | 이 매처 샤드 종목만 실행. `make runner-up ... SHARD=0`이 설정 |
 | `SCENARIO_PATH` | unset | 뉴스 fixture JSON 경로. `--scenario`가 있으면 CLI가 우선한다 |
 
 `MAX_TRADERS=20`은 20명을 자동 생성하지 않는다. 백엔드에서 활성 프로필을 20개 만든 뒤, 이 runner가 최대 20개를 선택하도록 제한한다.
@@ -76,11 +77,11 @@ make runners-down
 make noise-runner-up
 make liquidity-provider-runner-up
 make runner-status
-make runner-logs STRATEGY=noise
+make runner-logs STRATEGY=noise SHARD=0
 make noise-runner-down
 ```
 
-`runners-up`은 지원하는 전략마다 독립 runner 컨테이너를 하나씩 실행한다. 따라서 특정 전략만 재시작하거나 중지해도 다른 전략에는 영향을 주지 않는다. 각 runner는 backend에서 해당 전략의 활성 프로필만 선택한다.
+`runners-up`은 전략마다 독립 runner를 띄운다. noise만 매처 샤드 0·1로 컨테이너 두 개다. 다른 전략은 종목 전체를 한 컨테이너가 맡는다. 특정 전략만 재시작하거나 중지해도 다른 전략에는 영향을 주지 않는다. 각 runner는 backend에서 해당 전략의 활성 프로필만 고르고, `RUNNER_SHARD_INDEX`가 있으면 그 샤드 종목만 남긴다.
 
 Compose profile은 `participant-runner/.env`가 있으면 자동으로 읽는다. 이 파일은 Git에서 제외되며, `MAX_TRADERS=100`처럼 개인 실험 범위를 둘 수 있다. 설정이 없으면 runner의 기본값을 사용한다.
 
@@ -91,6 +92,6 @@ cd participant-runner
 PYTHONPATH=../backend python -m unittest discover
 ```
 
-각 전략 runner는 서로 다른 전략의 프로필만 선택한다. 같은 전략 runner를 별도 Compose 프로젝트로 복제하면 동일 프로필이 중복 주문을 낼 수 있으므로, 추가 복제는 profile shard 규칙을 도입한 뒤 진행한다.
+각 전략 runner는 서로 다른 전략의 프로필만 선택한다. 같은 전략을 샤드마다 복제할 때는 `RUNNER_SHARD_INDEX`로 종목을 나눠, 한 프로필이 두 컨테이너에 들어가지 않게 한다.
 
 runner가 정상 종료되면 자신이 추적 중인 미체결 주문을 취소한다. 체결된 뒤 TTL 취소 대상이 된 주문은 backend가 `ALREADY_CLOSED`로 idempotent하게 응답하며, runner 상태 요약의 `already_closed`로 집계된다. 강제 종료나 네트워크 단절로 종료 처리가 실행되지 않은 주문은 현재 메모리 order book에 남을 수 있으므로, 부하 실험 뒤에는 주문을 재시작하거나 정리해야 한다. 서버 측 만료 처리는 주문 영속화 단계에서 별도로 도입한다.

@@ -11,7 +11,7 @@ from participant_runner.client import (
     ShardedBackendClient,
     SubmittedOrder,
 )
-from participant_runner.profiles import build_participants
+from participant_runner.profiles import InvalidTraderProfileError, build_participants
 from participant_runner.runner import ParticipantRunner, run_until_stopped
 
 
@@ -216,6 +216,93 @@ class ParticipantRunnerTests(TestCase):
             [participant.user_id for participant in filtered],
             ["momentum-2", "liquidity_provider-4"],
         )
+
+    def test_profile_selection_keeps_one_matcher_shard_before_max_traders(self) -> None:
+        profiles = [
+            {
+                "id": "1",
+                "enabled": True,
+                "user_id": "noise-hynix",
+                "symbol": "000660",
+                "strategy": "noise",
+                "reference_price": 250_000,
+                "price_step": 100,
+                "max_offset_steps": 1,
+                "quantity_min": 1,
+                "quantity_max": 2,
+                "order_ttl_ticks": 2,
+                "interval_ticks": 1,
+                "seed": 1,
+            },
+            {
+                "id": "2",
+                "enabled": True,
+                "user_id": "noise-samsung",
+                "symbol": "005930",
+                "strategy": "noise",
+                "reference_price": 70_000,
+                "price_step": 100,
+                "max_offset_steps": 1,
+                "quantity_min": 1,
+                "quantity_max": 2,
+                "order_ttl_ticks": 2,
+                "interval_ticks": 1,
+                "seed": 2,
+            },
+            {
+                "id": "3",
+                "enabled": True,
+                "user_id": "noise-sk",
+                "symbol": "000660",
+                "strategy": "noise",
+                "reference_price": 250_000,
+                "price_step": 100,
+                "max_offset_steps": 1,
+                "quantity_min": 1,
+                "quantity_max": 2,
+                "order_ttl_ticks": 2,
+                "interval_ticks": 1,
+                "seed": 3,
+            },
+        ]
+
+        shard_zero = build_participants(
+            profiles,
+            runner_shard_index=0,
+            symbol_shards={"000660": 0, "005930": 1},
+            max_traders=1,
+        )
+        shard_one = build_participants(
+            profiles,
+            runner_shard_index=1,
+            symbol_shards={"000660": 0, "005930": 1},
+        )
+
+        self.assertEqual([participant.user_id for participant in shard_zero], ["noise-hynix"])
+        self.assertEqual([participant.user_id for participant in shard_one], ["noise-samsung"])
+
+    def test_profile_selection_requires_shard_map_when_index_is_set(self) -> None:
+        with self.assertRaisesRegex(InvalidTraderProfileError, "RUNNER_SHARD_INDEX"):
+            build_participants(
+                (
+                    {
+                        "id": "1",
+                        "enabled": True,
+                        "user_id": "noise-1",
+                        "symbol": "005930",
+                        "strategy": "noise",
+                        "reference_price": 70_000,
+                        "price_step": 100,
+                        "max_offset_steps": 1,
+                        "quantity_min": 1,
+                        "quantity_max": 2,
+                        "order_ttl_ticks": 2,
+                        "interval_ticks": 1,
+                        "seed": 1,
+                    },
+                ),
+                runner_shard_index=0,
+            )
 
     def test_runner_emits_periodic_status_and_cleans_up_on_stop(self) -> None:
         client = FakeBackendClient()
