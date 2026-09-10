@@ -13,6 +13,13 @@ HTTP_CONCURRENCY_DEFAULT = 16
 HTTP_CONCURRENCY_MAXIMUM = 64
 
 
+def _parse_int(name: str, raw_value: str) -> int:
+    try:
+        return int(raw_value)
+    except ValueError as exc:
+        raise ConfigurationError(f"{name} must be an integer") from exc
+
+
 def _positive_int(
     name: str,
     default: int | None = None,
@@ -22,14 +29,21 @@ def _positive_int(
     raw_value = os.getenv(name)
     if raw_value is None or not raw_value.strip():
         return default
-    try:
-        value = int(raw_value)
-    except ValueError as exc:
-        raise ConfigurationError(f"{name} must be an integer") from exc
+    value = _parse_int(name, raw_value)
     if value < 1:
         raise ConfigurationError(f"{name} must be at least 1")
     if maximum is not None and value > maximum:
         raise ConfigurationError(f"{name} must be between 1 and {maximum}")
+    return value
+
+
+def _non_negative_int(name: str) -> int | None:
+    raw_value = os.getenv(name)
+    if raw_value is None or not raw_value.strip():
+        return None
+    value = _parse_int(name, raw_value)
+    if value < 0:
+        raise ConfigurationError(f"{name} must be at least 0")
     return value
 
 
@@ -46,6 +60,7 @@ class RunnerConfig:
     http_concurrency: int
     trader_ids: tuple[str, ...]
     trader_strategies: tuple[str, ...]
+    runner_shard_index: int | None
     scenario_path: Path | None
 
     @classmethod
@@ -110,5 +125,6 @@ class RunnerConfig:
             or HTTP_CONCURRENCY_DEFAULT,
             trader_ids=trader_ids,
             trader_strategies=trader_strategies,
+            runner_shard_index=_non_negative_int("RUNNER_SHARD_INDEX"),
             scenario_path=Path(raw_scenario) if raw_scenario else None,
         )

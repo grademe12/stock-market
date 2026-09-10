@@ -14,6 +14,8 @@ def build_participants(
     trader_ids: tuple[str, ...] = (),
     trader_strategies: tuple[str, ...] = (),
     max_traders: int | None = None,
+    runner_shard_index: int | None = None,
+    symbol_shards: dict[str, int] | None = None,
 ) -> tuple[TradingParticipant, ...]:
     selected_ids = set(trader_ids)
     selected_strategies = set(trader_strategies)
@@ -29,6 +31,18 @@ def build_participants(
         found_ids = {str(profile.get("id")) for profile in selected_profiles}
         if found_ids != selected_ids:
             raise InvalidTraderProfileError("each selected trader must exist and be enabled")
+
+    if runner_shard_index is not None:
+        shard_map = symbol_shards or {}
+        if not shard_map:
+            raise InvalidTraderProfileError(
+                "RUNNER_SHARD_INDEX requires matcher_shard values from /api/v1/symbols/"
+            )
+        selected_profiles = [
+            profile
+            for profile in selected_profiles
+            if shard_map.get(str(profile.get("symbol"))) == runner_shard_index
+        ]
 
     if max_traders is not None:
         selected_profiles = selected_profiles[:max_traders]
