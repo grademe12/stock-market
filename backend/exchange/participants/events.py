@@ -98,7 +98,7 @@ class ReactionCandidate:
     symbol: str
     quantity_min: int
     quantity_max: int
-    order_ttl_ticks: int
+    order_ttl_seconds: int
     interval_ticks: int
     seed: int
 
@@ -109,7 +109,7 @@ class ReactionCandidate:
         _require_positive_int("quantity_max", self.quantity_max)
         if self.quantity_max < self.quantity_min:
             raise ValueError("quantity range is invalid")
-        _require_positive_int("order_ttl_ticks", self.order_ttl_ticks)
+        _require_positive_int("order_ttl_seconds", self.order_ttl_seconds)
         _require_positive_int("interval_ticks", self.interval_ticks)
         _require_int("seed", self.seed)
 
@@ -245,7 +245,7 @@ class ResolvedReactionPlan:
     buy_probability_bps: int
     sides: tuple[OrderSide, ...]
     quantities: tuple[int, ...]
-    ttl_ticks: tuple[int, ...]
+    ttl_seconds: tuple[int, ...]
     order_tick_offsets: tuple[int, ...]
 
     def __post_init__(self) -> None:
@@ -256,7 +256,7 @@ class ResolvedReactionPlan:
         lengths = {
             len(self.sides),
             len(self.quantities),
-            len(self.ttl_ticks),
+            len(self.ttl_seconds),
             len(self.order_tick_offsets),
         }
         if len(lengths) != 1:
@@ -271,7 +271,7 @@ class ResolvedReactionPlan:
             raise ValueError("reaction sides must be BUY or SELL")
         if any(type(quantity) is not int or quantity < 1 for quantity in self.quantities):
             raise ValueError("reaction quantities must be positive integers")
-        if any(type(ttl) is not int or ttl < 1 for ttl in self.ttl_ticks):
+        if any(type(ttl) is not int or ttl < 1 for ttl in self.ttl_seconds):
             raise ValueError("reaction TTLs must be positive integers")
         if any(type(tick) is not int or tick < 0 for tick in self.order_tick_offsets):
             raise ValueError("reaction tick offsets must be non-negative integers")
@@ -423,7 +423,7 @@ class ReactionPlanner:
                 buy_probability_bps=buy_probability_bps,
                 sides=(),
                 quantities=(),
-                ttl_ticks=(),
+                ttl_seconds=(),
                 order_tick_offsets=(),
             )
 
@@ -471,7 +471,7 @@ class ReactionPlanner:
             buy_probability_bps=buy_probability_bps,
             sides=sides,
             quantities=quantities,
-            ttl_ticks=(candidate.order_ttl_ticks,) * order_count,
+            ttl_seconds=(candidate.order_ttl_seconds,) * order_count,
             order_tick_offsets=tuple(
                 first_order_tick + (index * order_interval_ticks)
                 for index in range(order_count)

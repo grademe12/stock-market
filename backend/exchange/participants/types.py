@@ -4,6 +4,8 @@ from typing import Protocol
 from exchange.orderbook import BookSnapshot, OrderSide
 
 
+ORDER_TTL_SECONDS_DEFAULT = 16
+
 SUPPORTED_STRATEGIES = (
     "noise",
     "momentum",
@@ -20,7 +22,7 @@ class OrderIntent:
     side: OrderSide
     price: int
     quantity: int
-    order_ttl_ticks: int | None = None
+    order_ttl_seconds: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,7 +37,7 @@ class TraderSettings:
     max_offset_steps: int
     quantity_min: int
     quantity_max: int
-    order_ttl_ticks: int
+    order_ttl_seconds: int
     interval_ticks: int
     seed: int
 
@@ -50,8 +52,8 @@ class TraderSettings:
             raise ValueError("max_offset_steps must not be negative")
         if self.quantity_min < 1 or self.quantity_max < self.quantity_min:
             raise ValueError("quantity range is invalid")
-        if self.order_ttl_ticks < 1 or self.interval_ticks < 1:
-            raise ValueError("tick intervals must be at least 1")
+        if self.order_ttl_seconds < 1 or self.interval_ticks < 1:
+            raise ValueError("ttl and interval must be at least 1")
 
 
 class TradingParticipant(Protocol):

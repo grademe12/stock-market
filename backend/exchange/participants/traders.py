@@ -29,7 +29,7 @@ class BaseTrader:
             side=side,
             price=max(self._settings.price_step, price),
             quantity=self._quantity(),
-            order_ttl_ticks=self._settings.order_ttl_ticks,
+            order_ttl_seconds=self._settings.order_ttl_seconds,
         )
 
     def _midpoint(self, snapshot: BookSnapshot) -> int:
@@ -126,7 +126,7 @@ class EventReactiveTrader(BaseTrader):
             symbol=self.symbol,
             quantity_min=settings.quantity_min,
             quantity_max=settings.quantity_max,
-            order_ttl_ticks=settings.order_ttl_ticks,
+            order_ttl_seconds=settings.order_ttl_seconds,
             interval_ticks=settings.interval_ticks,
             seed=settings.seed,
         )
@@ -194,7 +194,7 @@ class EventReactiveTrader(BaseTrader):
             side=side,
             price=self._reaction_price(side, snapshot),
             quantity=plan.quantities[index],
-            order_ttl_ticks=plan.ttl_ticks[index],
+            order_ttl_seconds=plan.ttl_seconds[index],
         )
 
     def _reaction_price(self, side: OrderSide, snapshot: BookSnapshot) -> int:

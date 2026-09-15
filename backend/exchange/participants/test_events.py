@@ -35,7 +35,7 @@ class ReactionPlannerTests(SimpleTestCase):
                 symbol=self.symbol,
                 quantity_min=1,
                 quantity_max=5,
-                order_ttl_ticks=3,
+                order_ttl_seconds=3,
                 interval_ticks=1,
                 seed=1_000 + index,
             )
@@ -97,7 +97,7 @@ class ReactionPlannerTests(SimpleTestCase):
                 all(1 <= quantity <= 5 for quantity in reaction.quantities)
             )
             self.assertEqual(
-                reaction.ttl_ticks,
+                reaction.ttl_seconds,
                 (3,) * reaction.order_count,
             )
 
@@ -132,7 +132,7 @@ class ReactionPlannerTests(SimpleTestCase):
                 symbol="000660",
                 quantity_min=1,
                 quantity_max=1,
-                order_ttl_ticks=1,
+                order_ttl_seconds=1,
                 interval_ticks=1,
                 seed=7,
             ),
@@ -175,7 +175,7 @@ class ReactionPlannerTests(SimpleTestCase):
                 symbol=self.symbol,
                 quantity_min=2,
                 quantity_max=1,
-                order_ttl_ticks=1,
+                order_ttl_seconds=1,
                 interval_ticks=1,
                 seed=1,
             )

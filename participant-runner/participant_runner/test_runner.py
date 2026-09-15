@@ -11,6 +11,7 @@ from participant_runner.client import (
     ShardedBackendClient,
     SubmittedOrder,
 )
+from participant_runner.coordinator import FakeClock
 from participant_runner.profiles import InvalidTraderProfileError, build_participants
 from participant_runner.runner import ParticipantRunner, RunnerStatus, run_until_stopped
 
@@ -103,7 +104,7 @@ def buy_intent(ttl: int = 1) -> OrderIntent:
         side=OrderSide.BUY,
         price=70_000,
         quantity=1,
-        order_ttl_ticks=ttl,
+        order_ttl_seconds=ttl,
     )
 
 
@@ -120,9 +121,11 @@ class ParticipantRunnerTests(TestCase):
 
     def test_runner_submits_and_expires_orders_over_http_client_port(self) -> None:
         client = FakeBackendClient()
-        runner = self.start_runner(client, (StaticParticipant((buy_intent(),)),))
+        clock = FakeClock(0)
+        runner = self.start_runner(client, (StaticParticipant((buy_intent(),)),), clock=clock)
 
         self.finish_tick(runner)
+        clock.advance(1_000)
         status = self.finish_tick(runner)
 
         self.assertEqual(len(client.submissions), 2)
@@ -141,7 +144,7 @@ class ParticipantRunnerTests(TestCase):
             max_offset_steps=5,
             quantity_min=1,
             quantity_max=1,
-            order_ttl_ticks=2,
+            order_ttl_seconds=2,
             interval_ticks=1,
             seed=42,
         )
@@ -168,9 +171,11 @@ class ParticipantRunnerTests(TestCase):
     def test_closed_orders_are_not_reported_as_failures(self) -> None:
         client = FakeBackendClient()
         client.closed_order_ids.add("order-1")
-        runner = self.start_runner(client, (StaticParticipant((buy_intent(),)),))
+        clock = FakeClock(0)
+        runner = self.start_runner(client, (StaticParticipant((buy_intent(),)),), clock=clock)
 
         self.finish_tick(runner)
+        clock.advance(1_000)
         status = self.finish_tick(runner)
 
         self.assertEqual(status.orders_already_closed_total, 1)
@@ -200,7 +205,7 @@ class ParticipantRunnerTests(TestCase):
                     "max_offset_steps": 1,
                     "quantity_min": 1,
                     "quantity_max": 2,
-                    "order_ttl_ticks": 2,
+                    "order_ttl_seconds": 2,
                     "interval_ticks": 1,
                     "seed": index,
                 }
@@ -240,7 +245,7 @@ class ParticipantRunnerTests(TestCase):
                 "max_offset_steps": 1,
                 "quantity_min": 1,
                 "quantity_max": 2,
-                "order_ttl_ticks": 2,
+                "order_ttl_seconds": 2,
                 "interval_ticks": 1,
                 "seed": 1,
             },
@@ -255,7 +260,7 @@ class ParticipantRunnerTests(TestCase):
                 "max_offset_steps": 1,
                 "quantity_min": 1,
                 "quantity_max": 2,
-                "order_ttl_ticks": 2,
+                "order_ttl_seconds": 2,
                 "interval_ticks": 1,
                 "seed": 2,
             },
@@ -270,7 +275,7 @@ class ParticipantRunnerTests(TestCase):
                 "max_offset_steps": 1,
                 "quantity_min": 1,
                 "quantity_max": 2,
-                "order_ttl_ticks": 2,
+                "order_ttl_seconds": 2,
                 "interval_ticks": 1,
                 "seed": 3,
             },
@@ -306,7 +311,7 @@ class ParticipantRunnerTests(TestCase):
                         "max_offset_steps": 1,
                         "quantity_min": 1,
                         "quantity_max": 2,
-                        "order_ttl_ticks": 2,
+                        "order_ttl_seconds": 2,
                         "interval_ticks": 1,
                         "seed": 1,
                     },
@@ -397,15 +402,14 @@ class ParticipantRunnerTests(TestCase):
                     side=OrderSide.BUY,
                     price=250_000,
                     quantity=1,
-                    order_ttl_ticks=1,
+                    order_ttl_seconds=1,
                 ),
             )
         )
         hynix.symbol = "000660"
         samsung = StaticParticipant((buy_intent(),))
 
-        runner = self.start_runner(client, (hynix, samsung), http_concurrency=1)
-        self.finish_tick(runner)
+        runner = self.start_runner(client, (hynix, samsung), http_concurrency=2)
         self.finish_tick(runner)
 
         self.assertEqual([intent.symbol for intent in shard_zero.submissions], ["000660"])

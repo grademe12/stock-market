@@ -3,15 +3,24 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 import logging
 from threading import Event, Lock, Semaphore
-from time import monotonic, sleep
+from time import monotonic, monotonic_ns, sleep
 from typing import Protocol
 
 from exchange.orderbook import BookSnapshot
-from exchange.participants.types import OrderIntent, TradingParticipant
+from exchange.participants.types import ORDER_TTL_SECONDS_DEFAULT, OrderIntent, TradingParticipant
 
 from participant_runner.client import BackendApiError, CancellationResult, SubmittedOrder
 from participant_runner.config import HTTP_CONCURRENCY_DEFAULT
 from participant_runner.coordinator import CoordinatorStatus, EventCoordinator
+
+
+class Clock(Protocol):
+    def monotonic_ms(self) -> int: ...
+
+
+class SystemClock:
+    def monotonic_ms(self) -> int:
+        return monotonic_ns() // 1_000_000
 
 
 class BackendClient(Protocol):
@@ -26,8 +35,7 @@ class BackendClient(Protocol):
 class TrackedOrder:
     order_id: str
     symbol: str
-    submitted_tick: int
-    expires_after_ticks: int
+    expires_at_ms: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +66,7 @@ class ParticipantRunner:
         participants: tuple[TradingParticipant, ...],
         coordinator: EventCoordinator | None = None,
         http_concurrency: int = HTTP_CONCURRENCY_DEFAULT,
+        clock: Clock | None = None,
     ) -> None:
         if http_concurrency < 1:
             raise ValueError("http_concurrency must be at least 1")
@@ -65,6 +74,7 @@ class ParticipantRunner:
         self._participants = participants
         self._coordinator = coordinator
         self._http_concurrency = http_concurrency
+        self._clock = clock or SystemClock()
         self._lock = Lock()
         self._slots = Semaphore(http_concurrency)
         self._pool = ThreadPoolExecutor(max_workers=http_concurrency)
@@ -209,11 +219,11 @@ class ParticipantRunner:
         with self._lock:
             self._orders_submitted += 1
             if submitted_order.remaining_quantity:
+                ttl_seconds = intent.order_ttl_seconds or ORDER_TTL_SECONDS_DEFAULT
                 self._outstanding_orders[submitted_order.order_id] = TrackedOrder(
                     order_id=submitted_order.order_id,
                     symbol=intent.symbol,
-                    submitted_tick=tick,
-                    expires_after_ticks=intent.order_ttl_ticks or 1,
+                    expires_at_ms=self._clock.monotonic_ms() + ttl_seconds * 1_000,
                 )
         return True
 
@@ -268,11 +278,12 @@ class ParticipantRunner:
         return self._coordinator.status()
 
     def _expire_orders(self) -> None:
+        now_ms = self._clock.monotonic_ms()
         with self._lock:
             expired_ids = tuple(
                 order_id
                 for order_id, tracked_order in self._outstanding_orders.items()
-                if self._tick - tracked_order.submitted_tick >= tracked_order.expires_after_ticks
+                if now_ms >= tracked_order.expires_at_ms
             )
         for order_id in expired_ids:
             if not self._start_http(

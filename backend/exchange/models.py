@@ -24,7 +24,7 @@ class TraderProfile(models.Model):
     max_offset_steps = models.PositiveIntegerField(default=5)
     quantity_min = models.PositiveIntegerField(default=1)
     quantity_max = models.PositiveIntegerField(default=10)
-    order_ttl_ticks = models.PositiveIntegerField(default=5)
+    order_ttl_seconds = models.PositiveIntegerField(default=16)
     interval_ticks = models.PositiveIntegerField(default=1)
     seed = models.IntegerField(default=42)
     created_at = models.DateTimeField(auto_now_add=True)

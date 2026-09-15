@@ -59,7 +59,7 @@ def build_participants(
                     max_offset_steps=int(profile["max_offset_steps"]),
                     quantity_min=int(profile["quantity_min"]),
                     quantity_max=int(profile["quantity_max"]),
-                    order_ttl_ticks=int(profile["order_ttl_ticks"]),
+                    order_ttl_seconds=int(profile["order_ttl_seconds"]),
                     interval_ticks=int(profile["interval_ticks"]),
                     seed=int(profile["seed"]),
                 )
