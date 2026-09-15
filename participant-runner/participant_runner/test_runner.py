@@ -1,4 +1,4 @@
-from threading import Lock
+from threading import Event, Lock
 from time import sleep
 from unittest import TestCase
 
@@ -12,7 +12,7 @@ from participant_runner.client import (
     SubmittedOrder,
 )
 from participant_runner.profiles import InvalidTraderProfileError, build_participants
-from participant_runner.runner import ParticipantRunner, run_until_stopped
+from participant_runner.runner import ParticipantRunner, RunnerStatus, run_until_stopped
 
 
 class StaticParticipant:
@@ -108,12 +108,22 @@ def buy_intent(ttl: int = 1) -> OrderIntent:
 
 
 class ParticipantRunnerTests(TestCase):
+    def start_runner(self, *args, **kwargs) -> ParticipantRunner:
+        runner = ParticipantRunner(*args, **kwargs)
+        self.addCleanup(runner.close)
+        return runner
+
+    def finish_tick(self, runner: ParticipantRunner) -> RunnerStatus:
+        runner.tick_once()
+        runner.wait_for_idle()
+        return runner.status()
+
     def test_runner_submits_and_expires_orders_over_http_client_port(self) -> None:
         client = FakeBackendClient()
-        runner = ParticipantRunner(client, (StaticParticipant((buy_intent(),)),))
+        runner = self.start_runner(client, (StaticParticipant((buy_intent(),)),))
 
-        runner.tick_once()
-        status = runner.tick_once()
+        self.finish_tick(runner)
+        status = self.finish_tick(runner)
 
         self.assertEqual(len(client.submissions), 2)
         self.assertEqual(client.canceled_order_ids, ["order-1"])
@@ -135,12 +145,12 @@ class ParticipantRunnerTests(TestCase):
             interval_ticks=1,
             seed=42,
         )
-        runner = ParticipantRunner(
+        runner = self.start_runner(
             client,
             (LiquidityProvider(settings), LiquidityProvider(settings)),
         )
 
-        status = runner.tick_once()
+        status = self.finish_tick(runner)
 
         self.assertEqual(client.book_requests, ["005930"])
         self.assertEqual(status.orders_submitted_total, 4)
@@ -148,9 +158,9 @@ class ParticipantRunnerTests(TestCase):
     def test_book_failure_skips_orders_and_is_reported(self) -> None:
         client = FakeBackendClient()
         client.book_error = BackendApiError(503, "unavailable")
-        runner = ParticipantRunner(client, (StaticParticipant((buy_intent(),)),))
+        runner = self.start_runner(client, (StaticParticipant((buy_intent(),)),))
 
-        status = runner.tick_once()
+        status = self.finish_tick(runner)
 
         self.assertEqual(client.submissions, [])
         self.assertEqual(status.request_failures_total, 1)
@@ -158,10 +168,10 @@ class ParticipantRunnerTests(TestCase):
     def test_closed_orders_are_not_reported_as_failures(self) -> None:
         client = FakeBackendClient()
         client.closed_order_ids.add("order-1")
-        runner = ParticipantRunner(client, (StaticParticipant((buy_intent(),)),))
+        runner = self.start_runner(client, (StaticParticipant((buy_intent(),)),))
 
-        runner.tick_once()
-        status = runner.tick_once()
+        self.finish_tick(runner)
+        status = self.finish_tick(runner)
 
         self.assertEqual(status.orders_already_closed_total, 1)
         self.assertEqual(status.request_failures_total, 0)
@@ -323,30 +333,54 @@ class ParticipantRunnerTests(TestCase):
     def test_http_concurrency_caps_in_flight_submits(self) -> None:
         client = ConcurrentBackendClient()
         intents = tuple(buy_intent() for _ in range(8))
-        runner = ParticipantRunner(
+        runner = self.start_runner(
             client,
             (StaticParticipant(intents),),
             http_concurrency=4,
         )
 
-        status = runner.tick_once()
+        status = self.finish_tick(runner)
 
-        self.assertEqual(status.orders_submitted_total, 8)
-        self.assertEqual(len(client.submissions), 8)
+        self.assertEqual(status.orders_submitted_total, 4)
+        self.assertEqual(len(client.submissions), 4)
         self.assertEqual(client.max_in_flight, 4)
 
     def test_serial_http_concurrency_keeps_one_in_flight(self) -> None:
         client = ConcurrentBackendClient()
         intents = tuple(buy_intent() for _ in range(3))
-        runner = ParticipantRunner(
+        runner = self.start_runner(
             client,
             (StaticParticipant(intents),),
             http_concurrency=1,
         )
 
-        runner.tick_once()
+        self.finish_tick(runner)
 
         self.assertEqual(client.max_in_flight, 1)
+        self.assertEqual(len(client.submissions), 1)
+
+    def test_tick_returns_before_http_finishes(self) -> None:
+        started = Event()
+        release = Event()
+
+        class GateClient(FakeBackendClient):
+            def submit_order(self, intent):
+                started.set()
+                if not release.wait(timeout=2):
+                    raise TimeoutError("release was not signaled")
+                return super().submit_order(intent)
+
+        client = GateClient()
+        runner = self.start_runner(client, (StaticParticipant((buy_intent(),)),))
+
+        status = runner.tick_once()
+
+        self.assertTrue(started.wait(timeout=1))
+        self.assertEqual(status.orders_submitted_total, 0)
+        self.assertEqual(status.http_in_flight, 1)
+        release.set()
+        runner.wait_for_idle()
+        self.assertEqual(runner.status().orders_submitted_total, 1)
 
     def test_sharded_client_sends_orders_to_the_owning_matcher(self) -> None:
         shard_zero = FakeBackendClient()
@@ -370,8 +404,9 @@ class ParticipantRunnerTests(TestCase):
         hynix.symbol = "000660"
         samsung = StaticParticipant((buy_intent(),))
 
-        runner = ParticipantRunner(client, (hynix, samsung), http_concurrency=1)
-        runner.tick_once()
+        runner = self.start_runner(client, (hynix, samsung), http_concurrency=1)
+        self.finish_tick(runner)
+        self.finish_tick(runner)
 
         self.assertEqual([intent.symbol for intent in shard_zero.submissions], ["000660"])
         self.assertEqual([intent.symbol for intent in shard_one.submissions], ["005930"])

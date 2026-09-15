@@ -73,7 +73,10 @@ def main() -> int:
     )
     if arguments.once:
         runner.tick_once()
-        logging.info("runner status: %s", asdict(runner.cancel_all_open_orders()))
+        try:
+            logging.info("runner status: %s", asdict(runner.cancel_all_open_orders()))
+        finally:
+            runner.close()
         return 0
 
     stop_event = Event()
