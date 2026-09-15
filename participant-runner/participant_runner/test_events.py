@@ -18,7 +18,7 @@ def event_settings(user_id: str = "event_reactive-1") -> TraderSettings:
         max_offset_steps=5,
         quantity_min=1,
         quantity_max=1,
-        order_ttl_ticks=3,
+        order_ttl_seconds=3,
         interval_ticks=1,
         seed=42,
     )

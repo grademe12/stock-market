@@ -56,7 +56,7 @@ class TraderProfileSerializer(serializers.ModelSerializer):
             "max_offset_steps",
             "quantity_min",
             "quantity_max",
-            "order_ttl_ticks",
+            "order_ttl_seconds",
             "interval_ticks",
             "seed",
             "created_at",
@@ -68,7 +68,7 @@ class TraderProfileSerializer(serializers.ModelSerializer):
             "price_step": {"min_value": 1},
             "quantity_min": {"min_value": 1},
             "quantity_max": {"min_value": 1},
-            "order_ttl_ticks": {"min_value": 1},
+            "order_ttl_seconds": {"min_value": 1},
             "interval_ticks": {"min_value": 1},
         }
 

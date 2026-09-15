@@ -26,7 +26,7 @@ class TraderStrategyTests(SimpleTestCase):
             "max_offset_steps": 5,
             "quantity_min": 1,
             "quantity_max": 1,
-            "order_ttl_ticks": 3,
+            "order_ttl_seconds": 3,
             "interval_ticks": 1,
             "seed": 42,
         }
@@ -119,7 +119,7 @@ class EventReactiveTraderTests(SimpleTestCase):
             "max_offset_steps": 5,
             "quantity_min": 1,
             "quantity_max": 10,
-            "order_ttl_ticks": 3,
+            "order_ttl_seconds": 3,
             "interval_ticks": 1,
             "seed": 42,
         }
@@ -147,7 +147,7 @@ class EventReactiveTraderTests(SimpleTestCase):
             "buy_probability_bps": 5_000,
             "sides": (OrderSide.BUY, OrderSide.SELL),
             "quantities": (3, 4),
-            "ttl_ticks": (5, 6),
+            "ttl_seconds": (5, 6),
             "order_tick_offsets": (5, 7),
         }
         values.update(overrides)
@@ -165,7 +165,7 @@ class EventReactiveTraderTests(SimpleTestCase):
                 reaction_after_ms=None,
                 sides=(),
                 quantities=(),
-                ttl_ticks=(),
+                ttl_seconds=(),
                 order_tick_offsets=(),
             )
         )
@@ -180,25 +180,25 @@ class EventReactiveTraderTests(SimpleTestCase):
 
         self.assertEqual(before, ())
         self.assertEqual(
-            (first[0].side, first[0].price, first[0].quantity, first[0].order_ttl_ticks),
+            (first[0].side, first[0].price, first[0].quantity, first[0].order_ttl_seconds),
             (OrderSide.BUY, 70_100, 3, 5),
         )
         self.assertEqual(between, ())
         self.assertEqual(
-            (second[0].side, second[0].price, second[0].quantity, second[0].order_ttl_ticks),
+            (second[0].side, second[0].price, second[0].quantity, second[0].order_ttl_seconds),
             (OrderSide.SELL, 69_900, 4, 6),
         )
         self.assertEqual(after, ())
 
     def test_empty_and_one_sided_books_use_reference_price_fallback(self) -> None:
         trader = EventReactiveTrader(self.settings())
-        buy_plan = self.plan(sides=(OrderSide.BUY,), quantities=(1,), ttl_ticks=(3,), order_tick_offsets=(1,))
+        buy_plan = self.plan(sides=(OrderSide.BUY,), quantities=(1,), ttl_seconds=(3,), order_tick_offsets=(1,))
         trader.apply_plan(buy_plan)
         empty_buy = trader.next_intents(1, self.snapshot())
         trader.apply_plan(buy_plan)
         bid_only_buy = trader.next_intents(1, self.snapshot(bid=69_900))
 
-        sell_plan = self.plan(sides=(OrderSide.SELL,), quantities=(1,), ttl_ticks=(3,), order_tick_offsets=(1,))
+        sell_plan = self.plan(sides=(OrderSide.SELL,), quantities=(1,), ttl_seconds=(3,), order_tick_offsets=(1,))
         trader.apply_plan(sell_plan)
         empty_sell = trader.next_intents(1, self.snapshot())
         trader.apply_plan(sell_plan)
@@ -211,7 +211,7 @@ class EventReactiveTraderTests(SimpleTestCase):
 
     def test_fallback_sell_price_is_clamped_to_the_price_step(self) -> None:
         trader = EventReactiveTrader(self.settings(reference_price=100, price_step=100))
-        trader.apply_plan(self.plan(sides=(OrderSide.SELL,), quantities=(1,), ttl_ticks=(3,), order_tick_offsets=(1,)))
+        trader.apply_plan(self.plan(sides=(OrderSide.SELL,), quantities=(1,), ttl_seconds=(3,), order_tick_offsets=(1,)))
 
         sell = trader.next_intents(1, self.snapshot())
 

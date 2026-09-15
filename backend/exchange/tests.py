@@ -343,7 +343,7 @@ class TraderProfileApiTests(APITestCase):
             "max_offset_steps": 0,
             "quantity_min": 3,
             "quantity_max": 3,
-            "order_ttl_ticks": 4,
+            "order_ttl_seconds": 4,
             "interval_ticks": 1,
             "seed": 42,
         }
@@ -421,7 +421,7 @@ class SeedTradersCommandTests(APITestCase):
             "max_offset_steps",
             "quantity_min",
             "quantity_max",
-            "order_ttl_ticks",
+            "order_ttl_seconds",
             "interval_ticks",
             "seed",
         )

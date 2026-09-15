@@ -65,7 +65,7 @@ sequenceDiagram
 - `LiquidityProvider`: midpoint를 중심으로 한 호가 아래 매수와 한 호가 위 매도를 함께 낸다.
 - `EventReactiveTrader`: 평소에는 주문하지 않는다. runner가 `--scenario` fixture로 반응 계획을 적용하면 예정 tick에만 계획된 방향·수량으로 주문한다.
 
-각 트레이더는 `interval_ticks` 주기마다 한 번만 주문 의도를 만든다. runner는 이 의도를 실제 HTTP 주문 API로 전송하고, 응답의 잔량이 0보다 큰 주문 ID만 자체 메모리에 추적한다. 추적된 주문은 `order_ttl_ticks`가 지나면 취소 API로 제거한다. 그 사이 다른 주문과 체결되어 이미 사라진 주문은 `ALREADY_CLOSED`로 처리하며, 정상적인 경쟁 상황으로 집계한다.
+각 트레이더는 `interval_ticks` 주기마다 한 번만 주문 의도를 만든다. runner는 이 의도를 실제 HTTP 주문 API로 전송하고, 응답의 잔량이 0보다 큰 주문 ID만 자체 메모리에 추적한다. 추적된 주문은 `order_ttl_seconds`가 지나면 취소 API로 제거한다. 그 사이 다른 주문과 체결되어 이미 사라진 주문은 `ALREADY_CLOSED`로 처리하며, 정상적인 경쟁 상황으로 집계한다.
 
 여기서 midpoint는 `(best bid + best ask) / 2`의 정수값이며 한쪽 호가만 있으면 그 가격, 호가가 없으면 프로필 기준가를 사용한다. 현재 API에는 체결가 이력이 없으므로 Momentum은 체결가가 아니라 이 midpoint의 tick 간 변화를 사용한다. 잔고·보유 수량·증거금 검증도 아직 없으므로, 현재 체결은 주문 우선순위와 수량 변화만 모사한다.
 
