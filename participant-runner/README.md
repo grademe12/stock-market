@@ -4,7 +4,7 @@
 
 ## Strategies
 
-runner는 매 tick마다 종목별 호가를 한 번 조회하고 아래 전략에 같은 스냅샷을 전달한다.
+runner는 벽시계 tick마다 종목별 호가를 한 번 조회하고 아래 전략에 같은 스냅샷을 전달한다. 주문·취소 HTTP가 끝날 때까지 다음 tick을 기다리지 않는다. `HTTP_CONCURRENCY`는 한 순간에 날아가는 요청 수 상한이다.
 
 | Strategy | 주문 규칙 |
 |---|---|
@@ -24,7 +24,7 @@ midpoint는 양쪽 호가가 있으면 두 최우선 호가의 평균, 한쪽만
 | Variable | Default | Meaning |
 |---|---:|---|
 | `BACKEND_BASE_URL` | `http://127.0.0.1:8000` | Django backend base URL. 프로필 조회와 샤드 1개일 때 사용 |
-| `TICK_INTERVAL_MS` | `1000` | runner tick 간격 |
+| `TICK_INTERVAL_MS` | `1000` | 결정 tick 간격. HTTP 완료를 기다리지 않는다 |
 | `REQUEST_TIMEOUT_MS` | `5000` | HTTP 요청 timeout |
 | `RUNNER_STATUS_LOG_INTERVAL_TICKS` | `60` | 상태 요약 로그 출력 주기 |
 | `MAX_TRADERS` | unlimited | 활성 프로필 중 이 컨테이너가 실행할 최대 수 |

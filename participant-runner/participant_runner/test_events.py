@@ -37,6 +37,16 @@ def shock_event(**overrides) -> NewsShockEvent:
 
 
 class EventCoordinatorRunnerTests(TestCase):
+    def start_runner(self, *args, **kwargs) -> ParticipantRunner:
+        runner = ParticipantRunner(*args, **kwargs)
+        self.addCleanup(runner.close)
+        return runner
+
+    def finish_tick(self, runner: ParticipantRunner):
+        runner.tick_once()
+        runner.wait_for_idle()
+        return runner.status()
+
     def test_baseline_continues_while_event_traders_wait_then_spike(self) -> None:
         client = FakeBackendClient()
         clock = FakeClock()
@@ -48,21 +58,21 @@ class EventCoordinatorRunnerTests(TestCase):
             tick_interval_ms=100,
             clock=clock,
         )
-        runner = ParticipantRunner(
+        runner = self.start_runner(
             client,
             (baseline, event_trader),
             coordinator=coordinator,
         )
 
         clock.advance(100)
-        first = runner.tick_once()
+        first = self.finish_tick(runner)
         event_orders_before = [
             intent for intent in client.submissions if intent.user_id == event_trader.user_id
         ]
 
         clock.advance(100)
         with self.assertLogs(level="INFO") as logs:
-            second = runner.tick_once()
+            second = self.finish_tick(runner)
         event_orders_after = [
             intent for intent in client.submissions if intent.user_id == event_trader.user_id
         ]
@@ -70,13 +80,13 @@ class EventCoordinatorRunnerTests(TestCase):
         remaining_ticks = 0
         while event_trader.remaining_reaction_orders and remaining_ticks < 400:
             clock.advance(100)
-            runner.tick_once()
+            self.finish_tick(runner)
             remaining_ticks += 1
         after_complete = [
             intent for intent in client.submissions if intent.user_id == event_trader.user_id
         ]
         clock.advance(100)
-        runner.tick_once()
+        self.finish_tick(runner)
         after_baseline = [
             intent for intent in client.submissions if intent.user_id == event_trader.user_id
         ]
@@ -109,7 +119,7 @@ class EventCoordinatorRunnerTests(TestCase):
             tick_interval_ms=100,
             clock=clock,
         )
-        runner = ParticipantRunner(
+        runner = self.start_runner(
             client,
             (baseline, event_trader),
             coordinator=coordinator,
@@ -117,7 +127,7 @@ class EventCoordinatorRunnerTests(TestCase):
 
         clock.advance(30_000)
         with self.assertLogs(level="INFO") as logs:
-            status = runner.tick_once()
+            status = self.finish_tick(runner)
 
         event_orders = [
             intent for intent in client.submissions if intent.user_id == event_trader.user_id
@@ -136,14 +146,14 @@ class EventCoordinatorRunnerTests(TestCase):
             clock=FakeClock(),
         )
         coordinator.before_tick = lambda tick: (_ for _ in ()).throw(RuntimeError("boom"))
-        runner = ParticipantRunner(
+        runner = self.start_runner(
             client,
             (StaticParticipant((buy_intent(),)),),
             coordinator=coordinator,
         )
 
         with self.assertLogs(level="ERROR") as logs:
-            status = runner.tick_once()
+            status = self.finish_tick(runner)
 
         self.assertEqual(status.orders_submitted_total, 1)
         self.assertIn("event coordinator failed", "\n".join(logs.output))
@@ -162,11 +172,11 @@ class EventCoordinatorRunnerTests(TestCase):
             tick_interval_ms=100,
             clock=clock,
         )
-        runner = ParticipantRunner(client, (event_trader,), coordinator=coordinator)
+        runner = self.start_runner(client, (event_trader,), coordinator=coordinator)
 
         for _ in range(100):
             clock.advance(100)
-            status = runner.tick_once()
+            status = self.finish_tick(runner)
             if event_trader.remaining_reaction_orders == 0:
                 break
 
