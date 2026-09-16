@@ -33,7 +33,12 @@ make monitoring-up
 make monitoring-status
 make monitoring-logs
 make monitoring-down
+make after-tailscale
+make after-tailscale-install
 ```
+
+`make after-tailscale` starts Prometheus and Grafana if they exited because the Tailscale bind address was missing at boot. Install the unit once so that happens after reboot.
+
 
 Open Grafana at `http://<OBSERVABILITY_BIND_ADDRESS>:3001` and Prometheus at `http://<OBSERVABILITY_BIND_ADDRESS>:9090`. Grafana login is `admin` with the password stored in `observability/.env`.
 

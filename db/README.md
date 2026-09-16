@@ -52,6 +52,9 @@ make db-tailscale-up
 make db-health
 ```
 
+전원 복구 직후 Tailscale IPv4가 아직 없으면 Docker가 이 bind에서 한 번 실패하고 끝난다. `make after-tailscale-install`로 부팅 유닛을 넣으면 IP가 생긴 뒤에 exited 컨테이너만 다시 올린다. 이미 만들어 둔 컨테이너를 `docker start`할 때는 `make after-tailscale`이면 된다. overlay 없이 `make db-up`을 다시 돌리지 않는다.
+
+
 실제 실행 구성은 다음 두 Compose 파일을 합친 결과다.
 
 ```bash

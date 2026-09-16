@@ -1,0 +1,16 @@
+[Unit]
+Description=Start Tailscale-bound Docker containers after Tailscale IPv4 is up
+After=docker.service tailscaled.service network-online.target
+Wants=docker.service tailscaled.service network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+TimeoutStartSec=180
+Restart=on-failure
+RestartSec=10
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+ExecStart=/usr/local/bin/start-tailscale-bound-containers.sh
+
+[Install]
+WantedBy=multi-user.target

@@ -42,7 +42,7 @@ RUNNER_STRATEGY_PROJECT = stock-market-runner-$(subst _,-,$(STRATEGY))$(if $(SHA
 RUNNER_STRATEGIES := noise momentum mean_reversion liquidity_provider event_reactive
 RUNNER_UP_FLAGS ?= --build
 
-.PHONY: backend-setup backend-migrate backend-test backend-run participant-runner-test runner-build runners-up runners-down runner-up runner-down runner-status runner-logs noise-runner-up noise-runner-down momentum-runner-up momentum-runner-down mean-reversion-runner-up mean-reversion-runner-down liquidity-provider-runner-up liquidity-provider-runner-down event-reactive-runner-up event-reactive-runner-down db-up db-tailscale-up db-status db-health db-backup db-restore db-migrate import-krx-top100 container-build container-backend-up container-down demo-up demo-seed demo-runner-up demo-logs demo-down load-backend-up load-backend-stats load-steady monitoring-config monitoring-up monitoring-down monitoring-status monitoring-logs test run
+.PHONY: backend-setup backend-migrate backend-test backend-run participant-runner-test runner-build runners-up runners-down runner-up runner-down runner-status runner-logs noise-runner-up noise-runner-down momentum-runner-up momentum-runner-down mean-reversion-runner-up mean-reversion-runner-down liquidity-provider-runner-up liquidity-provider-runner-down event-reactive-runner-up event-reactive-runner-down db-up db-tailscale-up db-status db-health db-backup db-restore db-migrate import-krx-top100 container-build container-backend-up container-down demo-up demo-seed demo-runner-up demo-logs demo-down load-backend-up load-backend-stats load-steady monitoring-config monitoring-up monitoring-down monitoring-status monitoring-logs after-tailscale after-tailscale-install test run
 backend-setup: ## Create backend virtualenv and install dependencies
 	python3 -m venv $(BACKEND_DIR)/.venv
 	$(BACKEND_PYTHON) -m pip install --upgrade pip
@@ -223,6 +223,15 @@ monitoring-status: ## Show Prometheus and Grafana container status
 monitoring-logs: ## Follow Prometheus, Grafana, and probe logs
 	@test -f observability/.env || { echo "missing observability/.env"; exit 1; }
 	$(MONITORING_COMPOSE) logs -f
+
+after-tailscale: ## Start exited containers bound to this machine's Tailscale IPv4
+	bash scripts/start-tailscale-bound-containers.sh
+
+after-tailscale-install: ## Install the boot unit that runs after-tailscale
+	sudo install -m 755 scripts/start-tailscale-bound-containers.sh /usr/local/bin/start-tailscale-bound-containers.sh
+	sudo install -m 644 scripts/stock-market-after-tailscale.service /etc/systemd/system/stock-market-after-tailscale.service
+	sudo systemctl daemon-reload
+	sudo systemctl enable stock-market-after-tailscale.service
 
 test: backend-test ## Alias for backend-test
 
