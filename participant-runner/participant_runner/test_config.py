@@ -56,7 +56,7 @@ class RunnerConfigTests(TestCase):
         with patch.dict(os.environ, {"HTTP_CONCURRENCY": "0"}, clear=True):
             with self.assertRaisesRegex(ConfigurationError, "HTTP_CONCURRENCY"):
                 RunnerConfig.from_environment()
-        with patch.dict(os.environ, {"HTTP_CONCURRENCY": "65"}, clear=True):
+        with patch.dict(os.environ, {"HTTP_CONCURRENCY": "129"}, clear=True):
             with self.assertRaisesRegex(ConfigurationError, "HTTP_CONCURRENCY"):
                 RunnerConfig.from_environment()
 

@@ -10,7 +10,7 @@ class ConfigurationError(ValueError):
 
 
 HTTP_CONCURRENCY_DEFAULT = 16
-HTTP_CONCURRENCY_MAXIMUM = 64
+HTTP_CONCURRENCY_MAXIMUM = 128
 
 
 def _parse_int(name: str, raw_value: str) -> int:
