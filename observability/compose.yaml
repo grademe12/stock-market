@@ -2,18 +2,19 @@ services:
   prometheus:
     image: prom/prometheus:v3.5.5
     restart: unless-stopped
+    network_mode: host
     cpus: 1.0
     mem_limit: 1g
     extra_hosts:
       - "stock-market-gce:${BACKEND_TAILSCALE_IP:?set BACKEND_TAILSCALE_IP}"
+      - "prometheus-self:${OBSERVABILITY_BIND_ADDRESS:?set OBSERVABILITY_BIND_ADDRESS}"
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=30d
       - --storage.tsdb.retention.size=10GB
       - --web.enable-lifecycle
-    ports:
-      - "${OBSERVABILITY_BIND_ADDRESS:?set OBSERVABILITY_BIND_ADDRESS}:9090:9090"
+      - --web.listen-address=${OBSERVABILITY_BIND_ADDRESS:?set OBSERVABILITY_BIND_ADDRESS}:9090
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
@@ -28,15 +29,22 @@ services:
     mem_limit: 128m
     extra_hosts:
       - "stock-market-gce:${BACKEND_TAILSCALE_IP:?set BACKEND_TAILSCALE_IP}"
+    ports:
+      - "127.0.0.1:9115:9115"
     volumes:
       - ./blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
 
   grafana:
     image: grafana/grafana:13.1.0
     restart: unless-stopped
+    network_mode: host
     cpus: 0.5
     mem_limit: 768m
+    extra_hosts:
+      - "prometheus:${OBSERVABILITY_BIND_ADDRESS:?set OBSERVABILITY_BIND_ADDRESS}"
     environment:
+      GF_SERVER_HTTP_ADDR: ${OBSERVABILITY_BIND_ADDRESS:?set OBSERVABILITY_BIND_ADDRESS}
+      GF_SERVER_HTTP_PORT: "3001"
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/admin_credential
       GF_USERS_ALLOW_SIGN_UP: "false"
@@ -44,8 +52,6 @@ services:
       GF_PLUGINS_PREINSTALL_DISABLED: "true"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
       GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
-    ports:
-      - "${OBSERVABILITY_BIND_ADDRESS:?set OBSERVABILITY_BIND_ADDRESS}:3001:3000"
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./dashboards:/var/lib/grafana/dashboards:ro

@@ -33,6 +33,8 @@ midpoint는 양쪽 호가가 있으면 두 최우선 호가의 평균, 한쪽만
 | `TRADER_STRATEGIES` | all strategies | 쉼표로 구분한 실행 전략. 주로 Make 명령이 자동 설정 |
 | `RUNNER_SHARD_INDEX` | all symbols | 이 매처 샤드 종목만 실행. `make runner-up ... SHARD=0`이 설정 |
 | `SCENARIO_PATH` | unset | 뉴스 fixture JSON 경로. `--scenario`가 있으면 CLI가 우선한다 |
+| `METRICS_PORT` | off | Prometheus `/metrics` listen port. `make runner-up`이 전략마다 지정 |
+| `METRICS_BIND` | `0.0.0.0` | metrics bind address |
 
 `MAX_TRADERS=20`은 20명을 자동 생성하지 않는다. 백엔드에서 활성 프로필을 20개 만든 뒤, 이 runner가 최대 20개를 선택하도록 제한한다.
 

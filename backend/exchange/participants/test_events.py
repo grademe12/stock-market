@@ -36,7 +36,7 @@ class ReactionPlannerTests(SimpleTestCase):
                 quantity_min=1,
                 quantity_max=5,
                 order_ttl_seconds=3,
-                interval_ticks=1,
+                interval_seconds=1,
                 seed=1_000 + index,
             )
             for index in range(1, count + 1)
@@ -133,7 +133,7 @@ class ReactionPlannerTests(SimpleTestCase):
                 quantity_min=1,
                 quantity_max=1,
                 order_ttl_seconds=1,
-                interval_ticks=1,
+                interval_seconds=1,
                 seed=7,
             ),
         )
@@ -176,7 +176,7 @@ class ReactionPlannerTests(SimpleTestCase):
                 quantity_min=2,
                 quantity_max=1,
                 order_ttl_seconds=1,
-                interval_ticks=1,
+                interval_seconds=1,
                 seed=1,
             )
 

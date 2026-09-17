@@ -16,6 +16,7 @@ def build_participants(
     max_traders: int | None = None,
     runner_shard_index: int | None = None,
     symbol_shards: dict[str, int] | None = None,
+    tick_interval_ms: int = 1_000,
 ) -> tuple[TradingParticipant, ...]:
     selected_ids = set(trader_ids)
     selected_strategies = set(trader_strategies)
@@ -60,9 +61,10 @@ def build_participants(
                     quantity_min=int(profile["quantity_min"]),
                     quantity_max=int(profile["quantity_max"]),
                     order_ttl_seconds=int(profile["order_ttl_seconds"]),
-                    interval_ticks=int(profile["interval_ticks"]),
+                    interval_seconds=int(profile["interval_seconds"]),
                     seed=int(profile["seed"]),
-                )
+                ),
+                tick_interval_ms=tick_interval_ms,
             )
             for profile in selected_profiles
         )
