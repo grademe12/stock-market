@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from exchange.orderbook import OrderNotFoundError, OrderSide
 from exchange.orderbook.registry import books
 from exchange.models import MarketDaily, TraderProfile
+from exchange.sharding import advertised_hostname, prometheus_sd_targets
 from exchange.simulation import (
     FALLBACK_SYMBOL,
     is_owned_symbol,
@@ -69,10 +70,38 @@ def readiness(request):
             cursor.fetchone()
     except DatabaseError:
         return Response(
-            {"status": "not_ready", "database": "unavailable"},
+            {
+                "status": "not_ready",
+                "database": "unavailable",
+                **_shard_topology(),
+            },
             status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
-    return Response({"status": "ready", "database": "ok"})
+    return Response({"status": "ready", "database": "ok", **_shard_topology()})
+
+
+def _shard_topology() -> dict[str, int]:
+    return {
+        "shard_index": settings.SIMULATION_SHARD_INDEX,
+        "shard_count": settings.SIMULATION_SHARD_COUNT,
+        "listen_port": settings.SIMULATION_LISTEN_PORT,
+    }
+
+
+@api_view(["GET"])
+def prometheus_service_discovery(request):
+    """Advertise host-network matcher scrape targets from this process's shard count."""
+    try:
+        hostname = advertised_hostname(request.get_host())
+    except ValueError:
+        return Response({"detail": "host header is required"}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(
+        prometheus_sd_targets(
+            hostname,
+            settings.SIMULATION_SHARD_COUNT,
+            base_port=settings.SIMULATION_LISTEN_PORT - settings.SIMULATION_SHARD_INDEX,
+        )
+    )
 
 
 @api_view(["POST"])

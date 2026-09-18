@@ -56,7 +56,7 @@ make demo-down
 
 현재 구성은 Kubernetes에 배포할 수 있는 컨테이너 경계를 만들지만, 수평 확장 가능한 거래소는 아니다.
 
-- backend는 메모리 호가창을 쓰므로 **같은 종목의 active matcher는 1개**만 허용한다. 종목 샤드(`SIMULATION_SHARD_INDEX` / `SIMULATION_SHARD_COUNT`)마다 프로세스 1개다.
+- backend는 메모리 호가창을 쓰므로 **같은 종목의 active matcher는 1개**만 허용한다. 종목 샤드(`SIMULATION_SHARD_INDEX` / `SIMULATION_SHARD_COUNT`)마다 프로세스 1개다. GCE 배포는 기본적으로 CPU 1개당 샤드 1개다.
 - participant-runner도 같은 트레이더의 중복 실행을 막기 위해 replica 1개만 허용한다.
 - runner 설정은 환경 변수만 읽는다. 로컬 `.env`는 Kubernetes의 ConfigMap/Secret 주입으로 대체할 수 있다.
 - `seed_traders`는 Django management command이므로 이후 Kubernetes Job 또는 migration Job에서 실행할 수 있다.

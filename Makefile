@@ -86,6 +86,12 @@ runner-up:
 	METRICS_PORT="$$(case "$(STRATEGY)-$(SHARD)" in \
 		noise-0) echo 9101;; \
 		noise-1) echo 9102;; \
+		noise-2) echo 9107;; \
+		noise-3) echo 9108;; \
+		noise-4) echo 9109;; \
+		noise-5) echo 9110;; \
+		noise-6) echo 9111;; \
+		noise-7) echo 9112;; \
 		momentum-) echo 9103;; \
 		mean_reversion-) echo 9104;; \
 		liquidity_provider-) echo 9105;; \
@@ -107,15 +113,20 @@ runner-logs: ## Follow one strategy runner log (example: make runner-logs STRATE
 	@test -n "$(STRATEGY)" || { echo "set STRATEGY: $(RUNNER_STRATEGIES)"; exit 1; }
 	RUNNER_STRATEGIES=$(STRATEGY) RUNNER_SHARD_INDEX=$(SHARD) docker compose -p $(RUNNER_STRATEGY_PROJECT) -f $(RUNNER_COMPOSE_FILE) logs -f runner
 
-noise-runner-up: ## Start noise runners split across matcher shards 0 and 1
+noise-runner-up: ## Start one noise runner per matcher shard reported by /ready/
 	$(MAKE) --no-print-directory runner-down STRATEGY=noise
-	$(MAKE) --no-print-directory runner-up STRATEGY=noise SHARD=0
-	$(MAKE) --no-print-directory runner-up STRATEGY=noise SHARD=1
+	@count="$$(python3 participant-runner/scripts/matcher_shard_count.py)"; \
+	i=0; \
+	while [ "$$i" -lt "$$count" ]; do \
+		$(MAKE) --no-print-directory runner-up STRATEGY=noise SHARD=$$i RUNNER_UP_FLAGS="$(RUNNER_UP_FLAGS)"; \
+		i=$$((i + 1)); \
+	done
 
-noise-runner-down: ## Stop both noise shard runners and the unsharded noise runner
+noise-runner-down: ## Stop every noise shard runner and the unsharded noise runner
 	$(MAKE) --no-print-directory runner-down STRATEGY=noise
-	$(MAKE) --no-print-directory runner-down STRATEGY=noise SHARD=0
-	$(MAKE) --no-print-directory runner-down STRATEGY=noise SHARD=1
+	@for shard in 0 1 2 3 4 5 6 7; do \
+		$(MAKE) --no-print-directory runner-down STRATEGY=noise SHARD=$$shard; \
+	done
 
 momentum-runner-up: ## Start the momentum strategy runner
 	$(MAKE) --no-print-directory runner-up STRATEGY=momentum

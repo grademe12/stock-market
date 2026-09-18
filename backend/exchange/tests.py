@@ -39,7 +39,16 @@ class ReadinessEndpointTests(APITestCase):
         response = self.client.get(reverse("readiness"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"status": "ready", "database": "ok"})
+        self.assertEqual(
+            response.json(),
+            {
+                "status": "ready",
+                "database": "ok",
+                "shard_index": 0,
+                "shard_count": 1,
+                "listen_port": 8000,
+            },
+        )
 
     def test_readiness_endpoint_rejects_an_unavailable_database(self):
         with patch("exchange.views.connection.cursor", side_effect=DatabaseError("offline")):
@@ -48,7 +57,22 @@ class ReadinessEndpointTests(APITestCase):
         self.assertEqual(response.status_code, 503)
         self.assertEqual(
             response.json(),
-            {"status": "not_ready", "database": "unavailable"},
+            {
+                "status": "not_ready",
+                "database": "unavailable",
+                "shard_index": 0,
+                "shard_count": 1,
+                "listen_port": 8000,
+            },
+        )
+
+    def test_prometheus_sd_lists_host_network_shards(self):
+        response = self.client.get(reverse("prometheus-sd"), HTTP_HOST="testserver:8000")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            [{"targets": ["testserver:8000"], "labels": {"matcher_shard": "0"}}],
         )
 
 

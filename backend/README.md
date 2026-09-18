@@ -69,9 +69,10 @@ make demo-seed TRADER_STRATEGY=event_reactive TRADER_COUNT=50
 ## Current API
 
 최신 KRX 거래일의 거래대금 상위 N종목을 메모리 호가창으로 처리합니다. N은
-`SIMULATION_SYMBOL_LIMIT`(기본 10, 1~100)입니다. 프로세스 2개로 나눌 때는
-`SIMULATION_SHARD_COUNT=2`와 `SIMULATION_SHARD_INDEX=0|1`로 거래대금 순위를
-교차 분배합니다. 참조 데이터가 없으면 개발용 `005930`만 허용합니다.
+`SIMULATION_SYMBOL_LIMIT`(기본 10, 1~100)입니다. 프로세스 여러 개로 나눌 때는 `SIMULATION_SHARD_COUNT`와
+`SIMULATION_SHARD_INDEX`로 거래대금 순위를 교차 분배합니다. GCE 배포 스크립트는
+별도 pin이 없으면 `nproc`만큼 프로세스를 띄웁니다(최대 8). 참조 데이터가 없으면
+개발용 `005930`만 허용합니다.
 
 | Endpoint | 설명 |
 |---|---|
@@ -81,7 +82,8 @@ make demo-seed TRADER_STRATEGY=event_reactive TRADER_COUNT=50
 | `GET /api/v1/trades/?symbol={symbol}&limit=50` | 해당 종목의 최신 체결 내역 조회 |
 | `GET /api/v1/symbols/?q=삼성&limit=20` | 최신 KRX 상위 100종목 검색 |
 | `GET /api/v1/health/` | 프로세스 liveness 확인 |
-| `GET /api/v1/ready/` | 데이터베이스 연결 readiness 확인 |
+| `GET /api/v1/ready/` | 데이터베이스 연결과 샤드 topology(`shard_index`, `shard_count`, `listen_port`) |
+| `GET /api/v1/prometheus-sd/` | Prometheus HTTP SD. host-network 샤드 `:8000+index` |
 | `GET` / `POST /api/v1/traders/` | 트레이더 환경설정 목록 조회 / 생성 |
 | `GET` / `PATCH` / `DELETE /api/v1/traders/{trader_id}/` | 개별 트레이더 환경설정 조회 / 수정 / 삭제 |
 
