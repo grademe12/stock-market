@@ -145,7 +145,7 @@ class ParticipantRunnerTests(TestCase):
             quantity_min=1,
             quantity_max=1,
             order_ttl_seconds=2,
-            interval_ticks=1,
+            interval_seconds=1,
             seed=42,
         )
         runner = self.start_runner(
@@ -206,7 +206,7 @@ class ParticipantRunnerTests(TestCase):
                     "quantity_min": 1,
                     "quantity_max": 2,
                     "order_ttl_seconds": 2,
-                    "interval_ticks": 1,
+                    "interval_seconds": 1,
                     "seed": index,
                 }
             )
@@ -246,7 +246,7 @@ class ParticipantRunnerTests(TestCase):
                 "quantity_min": 1,
                 "quantity_max": 2,
                 "order_ttl_seconds": 2,
-                "interval_ticks": 1,
+                "interval_seconds": 1,
                 "seed": 1,
             },
             {
@@ -261,7 +261,7 @@ class ParticipantRunnerTests(TestCase):
                 "quantity_min": 1,
                 "quantity_max": 2,
                 "order_ttl_seconds": 2,
-                "interval_ticks": 1,
+                "interval_seconds": 1,
                 "seed": 2,
             },
             {
@@ -276,7 +276,7 @@ class ParticipantRunnerTests(TestCase):
                 "quantity_min": 1,
                 "quantity_max": 2,
                 "order_ttl_seconds": 2,
-                "interval_ticks": 1,
+                "interval_seconds": 1,
                 "seed": 3,
             },
         ]
@@ -312,7 +312,7 @@ class ParticipantRunnerTests(TestCase):
                         "quantity_min": 1,
                         "quantity_max": 2,
                         "order_ttl_seconds": 2,
-                        "interval_ticks": 1,
+                        "interval_seconds": 1,
                         "seed": 1,
                     },
                 ),

@@ -23,6 +23,19 @@ class RunnerConfigTests(TestCase):
             ("momentum", "liquidity_provider"),
         )
 
+    def test_metrics_port_defaults_off(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            config = RunnerConfig.from_environment()
+
+        self.assertIsNone(config.metrics_port)
+        self.assertEqual(config.metrics_bind, "0.0.0.0")
+
+    def test_reads_metrics_port(self) -> None:
+        with patch.dict(os.environ, {"METRICS_PORT": "9101"}, clear=True):
+            config = RunnerConfig.from_environment()
+
+        self.assertEqual(config.metrics_port, 9101)
+
     def test_reads_http_concurrency_cap(self) -> None:
         with patch.dict(os.environ, {"HTTP_CONCURRENCY": "32"}, clear=True):
             config = RunnerConfig.from_environment()

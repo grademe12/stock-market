@@ -5,6 +5,7 @@ from exchange.orderbook import BookSnapshot, OrderSide
 
 
 ORDER_TTL_SECONDS_DEFAULT = 16
+TICK_INTERVAL_MS_DEFAULT = 1_000
 
 SUPPORTED_STRATEGIES = (
     "noise",
@@ -38,7 +39,7 @@ class TraderSettings:
     quantity_min: int
     quantity_max: int
     order_ttl_seconds: int
-    interval_ticks: int
+    interval_seconds: int
     seed: int
 
     def __post_init__(self) -> None:
@@ -52,8 +53,18 @@ class TraderSettings:
             raise ValueError("max_offset_steps must not be negative")
         if self.quantity_min < 1 or self.quantity_max < self.quantity_min:
             raise ValueError("quantity range is invalid")
-        if self.order_ttl_seconds < 1 or self.interval_ticks < 1:
+        if self.order_ttl_seconds < 1 or self.interval_seconds < 1:
             raise ValueError("ttl and interval must be at least 1")
+
+
+def ticks_for_interval(interval_seconds: int, tick_interval_ms: int) -> int:
+    """Convert a wall-clock order interval into runner ticks."""
+
+    if interval_seconds < 1:
+        raise ValueError("interval_seconds must be at least 1")
+    if tick_interval_ms < 1:
+        raise ValueError("tick_interval_ms must be at least 1")
+    return max(1, (interval_seconds * 1_000 + tick_interval_ms - 1) // tick_interval_ms)
 
 
 class TradingParticipant(Protocol):

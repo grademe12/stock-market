@@ -57,7 +57,7 @@ variable "backend_image_project" {
 variable "vm_machine_type" {
   description = "Machine type for the single backend VM."
   type        = string
-  default     = "e2-medium"
+  default     = "e2-standard-4"
 }
 
 variable "tailscale_hostname" {

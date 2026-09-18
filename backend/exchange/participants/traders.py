@@ -2,19 +2,31 @@ from random import Random
 
 from exchange.orderbook import BookSnapshot, OrderSide
 from exchange.participants.events import ReactionCandidate, ResolvedReactionPlan
-from exchange.participants.types import OrderIntent, TraderSettings, TradingParticipant
+from exchange.participants.types import (
+    TICK_INTERVAL_MS_DEFAULT,
+    OrderIntent,
+    TraderSettings,
+    TradingParticipant,
+    ticks_for_interval,
+)
 
 
 class BaseTrader:
-    def __init__(self, settings: TraderSettings) -> None:
+    def __init__(
+        self,
+        settings: TraderSettings,
+        *,
+        tick_interval_ms: int = TICK_INTERVAL_MS_DEFAULT,
+    ) -> None:
         self.user_id = settings.user_id
         self.symbol = settings.symbol
         self._settings = settings
         self._random = Random(settings.seed)
-        self._phase = settings.seed % settings.interval_ticks
+        self._interval_ticks = ticks_for_interval(settings.interval_seconds, tick_interval_ms)
+        self._phase = settings.seed % self._interval_ticks
 
     def _is_due(self, tick: int) -> bool:
-        return (tick + self._phase) % self._settings.interval_ticks == 0
+        return (tick + self._phase) % self._interval_ticks == 0
 
     def _quantity(self) -> int:
         return self._random.randint(
@@ -51,9 +63,6 @@ class NoiseTrader(BaseTrader):
     independent participants placing limits around a shared reference price.
     """
 
-    def __init__(self, settings: TraderSettings) -> None:
-        super().__init__(settings)
-
     def next_intents(self, tick: int, snapshot: BookSnapshot) -> tuple[OrderIntent, ...]:
         if not self._is_due(tick):
             return ()
@@ -71,8 +80,13 @@ class NoiseTrader(BaseTrader):
 class MomentumTrader(BaseTrader):
     """Follow the direction of the order-book midpoint between due ticks."""
 
-    def __init__(self, settings: TraderSettings) -> None:
-        super().__init__(settings)
+    def __init__(
+        self,
+        settings: TraderSettings,
+        *,
+        tick_interval_ms: int = TICK_INTERVAL_MS_DEFAULT,
+    ) -> None:
+        super().__init__(settings, tick_interval_ms=tick_interval_ms)
         self._previous_midpoint: int | None = None
 
     def next_intents(self, tick: int, snapshot: BookSnapshot) -> tuple[OrderIntent, ...]:
@@ -114,8 +128,13 @@ class MeanReversionTrader(BaseTrader):
 class EventReactiveTrader(BaseTrader):
     """Stay dormant until a resolved news-reaction plan is applied."""
 
-    def __init__(self, settings: TraderSettings) -> None:
-        super().__init__(settings)
+    def __init__(
+        self,
+        settings: TraderSettings,
+        *,
+        tick_interval_ms: int = TICK_INTERVAL_MS_DEFAULT,
+    ) -> None:
+        super().__init__(settings, tick_interval_ms=tick_interval_ms)
         self._plan: ResolvedReactionPlan | None = None
         self._consumed_indexes: set[int] = set()
 
@@ -127,7 +146,7 @@ class EventReactiveTrader(BaseTrader):
             quantity_min=settings.quantity_min,
             quantity_max=settings.quantity_max,
             order_ttl_seconds=settings.order_ttl_seconds,
-            interval_ticks=settings.interval_ticks,
+            interval_seconds=settings.interval_seconds,
             seed=settings.seed,
         )
 
@@ -229,7 +248,11 @@ class LiquidityProvider(BaseTrader):
         )
 
 
-def build_trader(settings: TraderSettings) -> TradingParticipant:
+def build_trader(
+    settings: TraderSettings,
+    *,
+    tick_interval_ms: int = TICK_INTERVAL_MS_DEFAULT,
+) -> TradingParticipant:
     traders: dict[str, type[BaseTrader]] = {
         "noise": NoiseTrader,
         "momentum": MomentumTrader,
@@ -241,4 +264,4 @@ def build_trader(settings: TraderSettings) -> TradingParticipant:
         trader_class = traders[settings.strategy]
     except KeyError as exc:
         raise ValueError(f"unsupported strategy: {settings.strategy}") from exc
-    return trader_class(settings)
+    return trader_class(settings, tick_interval_ms=tick_interval_ms)

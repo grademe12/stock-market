@@ -9,6 +9,8 @@ services:
     environment:
       TRADER_STRATEGIES: ${RUNNER_STRATEGIES:-}
       RUNNER_SHARD_INDEX: ${RUNNER_SHARD_INDEX:-}
+      METRICS_PORT: ${METRICS_PORT:-0}
+      METRICS_BIND: ${METRICS_BIND:-0.0.0.0}
     network_mode: host
     restart: unless-stopped
     stop_grace_period: 30s

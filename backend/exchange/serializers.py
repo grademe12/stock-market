@@ -57,7 +57,7 @@ class TraderProfileSerializer(serializers.ModelSerializer):
             "quantity_min",
             "quantity_max",
             "order_ttl_seconds",
-            "interval_ticks",
+            "interval_seconds",
             "seed",
             "created_at",
             "updated_at",
@@ -69,7 +69,7 @@ class TraderProfileSerializer(serializers.ModelSerializer):
             "quantity_min": {"min_value": 1},
             "quantity_max": {"min_value": 1},
             "order_ttl_seconds": {"min_value": 1},
-            "interval_ticks": {"min_value": 1},
+            "interval_seconds": {"min_value": 1},
         }
 
     def validate(self, attrs):

@@ -8,6 +8,7 @@ from types import MappingProxyType
 from typing import Final
 
 from exchange.orderbook import OrderSide
+from exchange.participants.types import ticks_for_interval
 
 
 BASIS_POINTS: Final = 10_000
@@ -99,7 +100,7 @@ class ReactionCandidate:
     quantity_min: int
     quantity_max: int
     order_ttl_seconds: int
-    interval_ticks: int
+    interval_seconds: int
     seed: int
 
     def __post_init__(self) -> None:
@@ -110,7 +111,7 @@ class ReactionCandidate:
         if self.quantity_max < self.quantity_min:
             raise ValueError("quantity range is invalid")
         _require_positive_int("order_ttl_seconds", self.order_ttl_seconds)
-        _require_positive_int("interval_ticks", self.interval_ticks)
+        _require_positive_int("interval_seconds", self.interval_seconds)
         _require_int("seed", self.seed)
 
 
@@ -419,7 +420,10 @@ class ReactionPlanner:
                 symbol=candidate.symbol,
                 activated=False,
                 reaction_after_ms=None,
-                order_interval_ticks=candidate.interval_ticks,
+                order_interval_ticks=ticks_for_interval(
+                    candidate.interval_seconds,
+                    self._tick_interval_ms,
+                ),
                 buy_probability_bps=buy_probability_bps,
                 sides=(),
                 quantities=(),
@@ -442,7 +446,7 @@ class ReactionPlanner:
         )
         order_count = random.randint(preset.order_count_min, preset.order_count_max)
         order_interval_ticks = max(
-            candidate.interval_ticks,
+            ticks_for_interval(candidate.interval_seconds, self._tick_interval_ms),
             random.randint(
                 preset.order_interval_ticks_min,
                 preset.order_interval_ticks_max,

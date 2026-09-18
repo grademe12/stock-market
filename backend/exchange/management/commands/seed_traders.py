@@ -55,7 +55,7 @@ class Command(BaseCommand):
                     "quantity_min": quantity_min,
                     "quantity_max": random.randint(quantity_min, 15),
                     "order_ttl_seconds": 16,
-                    "interval_ticks": random.randint(1, 5),
+                    "interval_seconds": random.randint(1, 5),
                     "seed": random.randint(1, 2_147_483_647),
                 },
             )

@@ -8,7 +8,9 @@ Prometheus and Grafana run on the mini PC and reach the GCE backend over Tailsca
 - Blackbox exporter probes `/api/v1/ready/`, including the backend database check.
 - Grafana provisions the Prometheus datasource and the `Stock Market Backend` dashboard automatically.
 
-The dashboard covers HTTP RPS and status, p99 latency, order and trade rates, rejected orders, order-book quantity, process CPU and memory, and readiness latency.
+The dashboard covers HTTP RPS and status, order POST throughput and p50/p95/p99 latency, runner `http_in_flight` and submit rate, rejected orders, order-book quantity, process CPU and memory, and readiness latency.
+
+Runner containers expose `/metrics` on host ports 9101–9106. Prometheus runs on the host network and scrapes `127.0.0.1:9101`–`9106`.
 
 ## Configure
 
@@ -40,6 +42,6 @@ make after-tailscale-install
 `make after-tailscale` starts Prometheus and Grafana if they exited because the Tailscale bind address was missing at boot. Install the unit once so that happens after reboot.
 
 
-Open Grafana at `http://<OBSERVABILITY_BIND_ADDRESS>:3001` and Prometheus at `http://<OBSERVABILITY_BIND_ADDRESS>:9090`. Grafana login is `admin` with the password stored in `observability/.env`.
+Open Grafana at `http://<OBSERVABILITY_BIND_ADDRESS>:3001` and Prometheus at `http://<OBSERVABILITY_BIND_ADDRESS>:9090`. Grafana login is `admin` with the password stored in `observability/.env`. Prometheus and Grafana use the host network so they can scrape local runner ports and still stay bound to the Tailscale IPv4.
 
 The readiness probe works against the existing backend immediately. Application metric panels begin receiving data after the backend containing `/metrics/` is deployed.

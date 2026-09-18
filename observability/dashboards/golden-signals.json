@@ -41,7 +41,7 @@
       "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
       "id": 4,
       "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "showPercentChange": true, "textMode": "auto", "wideLayout": true },
-      "targets": [{ "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{route=\"api/v1/orders/\",method=\"POST\"}[5m])))", "refId": "A" }],
+      "targets": [{ "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{route=\"api/v1/orders/\",method=\"POST\"}[1m])))", "refId": "A" }],
       "title": "Order POST latency p99",
       "type": "stat"
     },
@@ -117,6 +117,50 @@
       "targets": [{ "expr": "probe_duration_seconds{job=\"stock-market-backend-readiness\",instance=~\".*stock-market-gce.*\"}", "legendFormat": "readiness request", "refId": "A" }],
       "title": "Backend readiness latency",
       "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 36 },
+      "id": 12,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [{ "expr": "sum(rate(http_requests_total{route=\"api/v1/orders/\",method=\"POST\"}[1m]))", "legendFormat": "POST /orders", "refId": "A" }],
+      "title": "POST /orders throughput",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 36 },
+      "id": 13,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "none" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum by (le) (rate(http_request_duration_seconds_bucket{route=\"api/v1/orders/\",method=\"POST\"}[1m])))", "legendFormat": "p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{route=\"api/v1/orders/\",method=\"POST\"}[1m])))", "legendFormat": "p95", "refId": "B" },
+        { "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{route=\"api/v1/orders/\",method=\"POST\"}[1m])))", "legendFormat": "p99", "refId": "C" }
+      ],
+      "title": "POST /orders latency p50/p95/p99",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 44 },
+      "id": 14,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [{ "expr": "sum by (strategy, shard) (runner_http_in_flight)", "legendFormat": "{{strategy}} shard={{shard}}", "refId": "A" }],
+      "title": "Runner http_in_flight",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 44 },
+      "id": 15,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [{ "expr": "sum by (strategy, shard) (rate(runner_orders_submitted_total[1m]))", "legendFormat": "{{strategy}} shard={{shard}}", "refId": "A" }],
+      "title": "Runner orders submitted / second",
+      "type": "timeseries"
     }
   ],
   "refresh": "10s",
@@ -127,5 +171,5 @@
   "timezone": "browser",
   "title": "Stock Market Backend",
   "uid": "stock-market-backend",
-  "version": 2
+  "version": 3
 }

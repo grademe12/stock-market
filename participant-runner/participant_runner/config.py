@@ -62,6 +62,8 @@ class RunnerConfig:
     trader_strategies: tuple[str, ...]
     runner_shard_index: int | None
     scenario_path: Path | None
+    metrics_bind: str
+    metrics_port: int | None
 
     @classmethod
     def from_environment(cls) -> "RunnerConfig":
@@ -127,4 +129,6 @@ class RunnerConfig:
             trader_strategies=trader_strategies,
             runner_shard_index=_non_negative_int("RUNNER_SHARD_INDEX"),
             scenario_path=Path(raw_scenario) if raw_scenario else None,
+            metrics_bind=os.getenv("METRICS_BIND", "0.0.0.0").strip() or "0.0.0.0",
+            metrics_port=_non_negative_int("METRICS_PORT"),
         )

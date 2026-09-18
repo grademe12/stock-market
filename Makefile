@@ -83,7 +83,16 @@ runner-up:
 	@case " $(RUNNER_STRATEGIES) " in *" $(STRATEGY) "*) ;; *) echo "unsupported STRATEGY=$(STRATEGY); choose: $(RUNNER_STRATEGIES)"; exit 1;; esac
 	@if [ -n "$(SHARD)" ]; then case "$(SHARD)" in *[!0-9]*) echo "SHARD must be an integer >= 0"; exit 1;; esac; fi
 	@test -f participant-runner/.env || { echo "copy participant-runner/.env.example to participant-runner/.env first"; exit 1; }
-	RUNNER_STRATEGIES=$(STRATEGY) RUNNER_SHARD_INDEX=$(SHARD) docker compose -p $(RUNNER_STRATEGY_PROJECT) -f $(RUNNER_COMPOSE_FILE) up -d $(RUNNER_UP_FLAGS)
+	METRICS_PORT="$$(case "$(STRATEGY)-$(SHARD)" in \
+		noise-0) echo 9101;; \
+		noise-1) echo 9102;; \
+		momentum-) echo 9103;; \
+		mean_reversion-) echo 9104;; \
+		liquidity_provider-) echo 9105;; \
+		event_reactive-) echo 9106;; \
+		*) echo 0;; \
+	esac)"; \
+	RUNNER_STRATEGIES=$(STRATEGY) RUNNER_SHARD_INDEX=$(SHARD) METRICS_PORT="$$METRICS_PORT" docker compose -p $(RUNNER_STRATEGY_PROJECT) -f $(RUNNER_COMPOSE_FILE) up -d $(RUNNER_UP_FLAGS)
 
 runner-down:
 	@test -n "$(STRATEGY)" || { echo "set STRATEGY: $(RUNNER_STRATEGIES)"; exit 1; }

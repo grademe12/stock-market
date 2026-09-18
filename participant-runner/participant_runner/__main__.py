@@ -8,6 +8,7 @@ from threading import Event
 from participant_runner.client import BackendApiClient, BackendApiError, ShardedBackendClient
 from participant_runner.config import ConfigurationError, RunnerConfig
 from participant_runner.coordinator import EventCoordinator
+from participant_runner.metrics import MetricsServer, render_metrics
 from participant_runner.profiles import InvalidTraderProfileError, build_participants
 from participant_runner.runner import ParticipantRunner, run_until_stopped
 from participant_runner.scenario import InvalidScenarioError, load_scenario
@@ -44,6 +45,7 @@ def main() -> int:
             max_traders=config.max_traders,
             runner_shard_index=config.runner_shard_index,
             symbol_shards=symbol_shards,
+            tick_interval_ms=config.tick_interval_ms,
         )
         coordinator = _build_coordinator(arguments.scenario, config, participants)
     except (
@@ -71,11 +73,14 @@ def main() -> int:
         coordinator=coordinator,
         http_concurrency=config.http_concurrency,
     )
+    metrics_server = _start_metrics(config, runner)
     if arguments.once:
         runner.tick_once()
         try:
             logging.info("runner status: %s", asdict(runner.cancel_all_open_orders()))
         finally:
+            if metrics_server is not None:
+                metrics_server.stop()
             runner.close()
         return 0
 
@@ -83,17 +88,21 @@ def main() -> int:
     signal.signal(signal.SIGINT, lambda *_: stop_event.set())
     signal.signal(signal.SIGTERM, lambda *_: stop_event.set())
     logging.info("runner started; press Ctrl+C to stop")
-    logging.info(
-        "runner stopped: %s",
-        asdict(
-            run_until_stopped(
-                runner,
-                config.tick_interval_ms,
-                config.status_log_interval_ticks,
-                stop_event,
-            )
-        ),
-    )
+    try:
+        logging.info(
+            "runner stopped: %s",
+            asdict(
+                run_until_stopped(
+                    runner,
+                    config.tick_interval_ms,
+                    config.status_log_interval_ticks,
+                    stop_event,
+                )
+            ),
+        )
+    finally:
+        if metrics_server is not None:
+            metrics_server.stop()
     return 0
 
 
@@ -113,6 +122,35 @@ def _build_coordinator(
         participants,
         tick_interval_ms=config.tick_interval_ms,
     )
+
+
+def _start_metrics(config: RunnerConfig, runner: ParticipantRunner) -> MetricsServer | None:
+    if not config.metrics_port:
+        return None
+    strategy = ",".join(config.trader_strategies) or "all"
+    shard = (
+        str(config.runner_shard_index)
+        if config.runner_shard_index is not None
+        else "all"
+    )
+
+    def render() -> str:
+        status = runner.status()
+        return render_metrics(
+            strategy=strategy,
+            shard=shard,
+            http_in_flight=status.http_in_flight,
+            orders_submitted_total=status.orders_submitted_total,
+        )
+
+    server = MetricsServer(config.metrics_bind, config.metrics_port, render)
+    server.start()
+    logging.info(
+        "runner metrics listening on %s:%s",
+        config.metrics_bind,
+        server.port,
+    )
+    return server
 
 
 if __name__ == "__main__":

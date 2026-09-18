@@ -344,7 +344,7 @@ class TraderProfileApiTests(APITestCase):
             "quantity_min": 3,
             "quantity_max": 3,
             "order_ttl_seconds": 4,
-            "interval_ticks": 1,
+            "interval_seconds": 1,
             "seed": 42,
         }
         payload.update(overrides)
@@ -361,7 +361,7 @@ class TraderProfileApiTests(APITestCase):
         list_response = self.client.get(reverse("trader-profile-list"))
         patch_response = self.client.patch(
             reverse("trader-profile-detail", args=[profile_id]),
-            {"interval_ticks": 3, "enabled": False},
+            {"interval_seconds": 3, "enabled": False},
             format="json",
         )
         delete_response = self.client.delete(reverse("trader-profile-detail", args=[profile_id]))
@@ -369,7 +369,7 @@ class TraderProfileApiTests(APITestCase):
         self.assertEqual(create_response.status_code, 201)
         self.assertEqual(list_response.data[0]["id"], profile_id)
         self.assertEqual(patch_response.status_code, 200)
-        self.assertEqual(patch_response.data["interval_ticks"], 3)
+        self.assertEqual(patch_response.data["interval_seconds"], 3)
         self.assertFalse(patch_response.data["enabled"])
         self.assertEqual(delete_response.status_code, 204)
         self.assertFalse(TraderProfile.objects.filter(id=profile_id).exists())
@@ -422,7 +422,7 @@ class SeedTradersCommandTests(APITestCase):
             "quantity_min",
             "quantity_max",
             "order_ttl_seconds",
-            "interval_ticks",
+            "interval_seconds",
             "seed",
         )
         first_run = list(TraderProfile.objects.order_by("user_id").values_list(*fields))

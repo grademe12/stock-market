@@ -11,6 +11,7 @@ from exchange.participants import (
     TraderSettings,
     build_trader,
 )
+from exchange.participants.types import ticks_for_interval
 
 
 class TraderStrategyTests(SimpleTestCase):
@@ -27,7 +28,7 @@ class TraderStrategyTests(SimpleTestCase):
             "quantity_min": 1,
             "quantity_max": 1,
             "order_ttl_seconds": 3,
-            "interval_ticks": 1,
+            "interval_seconds": 1,
             "seed": 42,
         }
         values.update(overrides)
@@ -45,13 +46,23 @@ class TraderStrategyTests(SimpleTestCase):
         )
 
     def test_noise_trader_is_reproducible_and_obeys_interval(self) -> None:
-        settings = self.settings("noise", interval_ticks=2)
+        settings = self.settings("noise", interval_seconds=2)
         first = NoiseTrader(settings)
         second = NoiseTrader(settings)
         snapshot = self.snapshot()
 
         self.assertEqual(first.next_intents(1, snapshot), ())
         self.assertEqual(first.next_intents(2, snapshot), second.next_intents(2, snapshot))
+
+    def test_interval_seconds_stay_on_wall_clock_when_ticks_shorten(self) -> None:
+        trader = NoiseTrader(self.settings("noise", interval_seconds=1), tick_interval_ms=100)
+        snapshot = self.snapshot()
+
+        due_ticks = [tick for tick in range(1, 21) if trader.next_intents(tick, snapshot)]
+
+        self.assertEqual(ticks_for_interval(1, 1_000), 1)
+        self.assertEqual(ticks_for_interval(1, 100), 10)
+        self.assertEqual(due_ticks, [8, 18])
 
     def test_momentum_trader_follows_midpoint_direction(self) -> None:
         trader = MomentumTrader(self.settings("momentum"))
@@ -120,7 +131,7 @@ class EventReactiveTraderTests(SimpleTestCase):
             "quantity_min": 1,
             "quantity_max": 10,
             "order_ttl_seconds": 3,
-            "interval_ticks": 1,
+            "interval_seconds": 1,
             "seed": 42,
         }
         values.update(overrides)
