@@ -28,7 +28,7 @@ midpoint는 양쪽 호가가 있으면 두 최우선 호가의 평균, 한쪽만
 | `REQUEST_TIMEOUT_MS` | `5000` | HTTP 요청 timeout |
 | `RUNNER_STATUS_LOG_INTERVAL_TICKS` | `60` | 상태 요약 로그 출력 주기 |
 | `MAX_TRADERS` | unlimited | 활성 프로필 중 이 컨테이너가 실행할 최대 수 |
-| `BACKEND_SHARD_URLS` | `BACKEND_BASE_URL` | 매처 샤드 URL 목록. `http://host:8000,http://host:8001` |
+| `BACKEND_SHARD_URLS` | `BACKEND_BASE_URL` | 매처 샤드 URL 목록. 호스트가 같고 포트만 다르면 `/ready/` topology로 개수를 맞춘다 |
 | `TRADER_IDS` | all enabled | 쉼표로 구분한 특정 트레이더 ID |
 | `TRADER_STRATEGIES` | all strategies | 쉼표로 구분한 실행 전략. 주로 Make 명령이 자동 설정 |
 | `RUNNER_SHARD_INDEX` | all symbols | 이 매처 샤드 종목만 실행. `make runner-up ... SHARD=0`이 설정 |
@@ -83,7 +83,7 @@ make runner-logs STRATEGY=noise SHARD=0
 make noise-runner-down
 ```
 
-`runners-up`은 전략마다 독립 runner를 띄운다. noise만 매처 샤드 0·1로 컨테이너 두 개다. 다른 전략은 종목 전체를 한 컨테이너가 맡는다. 특정 전략만 재시작하거나 중지해도 다른 전략에는 영향을 주지 않는다. 각 runner는 backend에서 해당 전략의 활성 프로필만 고르고, `RUNNER_SHARD_INDEX`가 있으면 그 샤드 종목만 남긴다.
+`runners-up`은 전략마다 독립 runner를 띄운다. noise는 `/api/v1/ready/`의 `shard_count`만큼 컨테이너를 나눈다. 다른 전략은 종목 전체를 한 컨테이너가 맡는다. 특정 전략만 재시작하거나 중지해도 다른 전략에는 영향을 주지 않는다. 각 runner는 backend에서 해당 전략의 활성 프로필만 고르고, `RUNNER_SHARD_INDEX`가 있으면 그 샤드 종목만 남긴다.
 
 Compose profile은 `participant-runner/.env`가 있으면 자동으로 읽는다. 이 파일은 Git에서 제외되며, `MAX_TRADERS=100`처럼 개인 실험 범위를 둘 수 있다. 설정이 없으면 runner의 기본값을 사용한다.
 

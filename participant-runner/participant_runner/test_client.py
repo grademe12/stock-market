@@ -36,3 +36,20 @@ class BackendApiClientTests(TestCase):
         self.assertEqual(snapshot.symbol, "005930")
         self.assertEqual(snapshot.bids[0].price, 69_900)
         self.assertEqual(snapshot.asks[0].quantity, 4)
+
+    @patch("participant_runner.client.urlopen")
+    def test_fetch_ready_returns_shard_topology(self, mocked_urlopen) -> None:
+        mocked_urlopen.return_value = FakeResponse(
+            {
+                "status": "ready",
+                "database": "ok",
+                "shard_index": 0,
+                "shard_count": 4,
+                "listen_port": 8000,
+            }
+        )
+        client = BackendApiClient("http://backend:8000", timeout_ms=5_000)
+
+        payload = client.fetch_ready()
+
+        self.assertEqual(payload["shard_count"], 4)

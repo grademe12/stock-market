@@ -5,8 +5,37 @@ IMAGE="${1:?image}"
 REGISTRY_HOST="${2:?registry host}"
 
 ENV_FILE=/etc/stock-market/backend.env
+SHARDS_FILE=/etc/stock-market/shards.env
 LEGACY_CONTAINER=stock-market-backend
-SHARD_COUNT=2
+SHARD_COUNT_MAXIMUM=8
+
+detect_shard_count() {
+  local raw cpus
+  raw="${SIMULATION_SHARD_COUNT:-}"
+  if [[ -n "${raw}" ]]; then
+    if [[ ! "${raw}" =~ ^[1-9][0-9]*$ ]]; then
+      echo "SIMULATION_SHARD_COUNT must be a positive integer" >&2
+      exit 1
+    fi
+    if (( raw > SHARD_COUNT_MAXIMUM )); then
+      echo "SIMULATION_SHARD_COUNT must be at most ${SHARD_COUNT_MAXIMUM}" >&2
+      exit 1
+    fi
+    printf '%s' "${raw}"
+    return
+  fi
+  cpus="$(nproc)"
+  if (( cpus < 1 )); then
+    cpus=1
+  fi
+  if (( cpus > SHARD_COUNT_MAXIMUM )); then
+    cpus="${SHARD_COUNT_MAXIMUM}"
+  fi
+  printf '%s' "${cpus}"
+}
+
+SHARD_COUNT="$(detect_shard_count)"
+echo "deploying ${SHARD_COUNT} matcher shard(s) (nproc=$(nproc) pin=${SIMULATION_SHARD_COUNT:-nproc})"
 
 sudo mkdir -p /etc/stock-market
 sudo chmod 700 /etc/stock-market
@@ -28,11 +57,15 @@ if ! tailscale ip -4 >/dev/null 2>&1; then
   exit 1
 fi
 
-registry_token="$(gcloud auth print-access-token)"
-printf '%s' "${registry_token}" \
-  | sudo docker login -u oauth2accesstoken --password-stdin "${REGISTRY_HOST}"
-unset registry_token
-sudo docker pull "${IMAGE}"
+if [[ "${SKIP_PULL:-}" == "1" ]]; then
+  sudo docker image inspect "${IMAGE}" >/dev/null
+else
+  registry_token="$(gcloud auth print-access-token)"
+  printf '%s' "${registry_token}" \
+    | sudo docker login -u oauth2accesstoken --password-stdin "${REGISTRY_HOST}"
+  unset registry_token
+  sudo docker pull "${IMAGE}"
+fi
 
 current_name() {
   printf 'stock-market-backend-%s' "$1"
@@ -71,6 +104,22 @@ container_exists() {
   sudo docker container inspect "$1" >/dev/null 2>&1
 }
 
+running_shard_indices() {
+  sudo docker ps -a --format '{{.Names}}' \
+    | sed -n 's/^stock-market-backend-\([0-9][0-9]*\)$/\1/p' \
+    | sort -n
+}
+
+remove_extra_shards() {
+  local index
+  for index in $(running_shard_indices); do
+    if (( index >= SHARD_COUNT )); then
+      sudo docker rm -f "$(current_name "${index}")" >/dev/null 2>&1 || true
+      sudo docker rm -f "$(previous_name "${index}")" >/dev/null 2>&1 || true
+    fi
+  done
+}
+
 retire_current() {
   local current="$1"
   local previous="$2"
@@ -83,7 +132,7 @@ retire_current() {
 
 restore_previous() {
   local index
-  for index in $(seq 0 $((SHARD_COUNT - 1))); do
+  for index in ${PREVIOUS_SHARD_INDICES:-}; do
     local current previous
     current="$(current_name "${index}")"
     previous="$(previous_name "${index}")"
@@ -92,6 +141,11 @@ restore_previous() {
       sudo docker rename "${previous}" "${current}"
       sudo docker start "${current}" >/dev/null
       echo "previous ${current} restored" >&2
+    fi
+  done
+  for index in $(running_shard_indices); do
+    if [[ " ${PREVIOUS_SHARD_INDICES:-} " != *" ${index} "* ]]; then
+      sudo docker rm -f "$(current_name "${index}")" >/dev/null 2>&1 || true
     fi
   done
 }
@@ -114,6 +168,9 @@ start_shard() {
 
 # Recover a previous interrupted deployment before starting another one.
 if ! container_exists "$(current_name 0)" && container_exists "$(previous_name 0)"; then
+  PREVIOUS_SHARD_INDICES="$(sudo docker ps -a --format '{{.Names}}' \
+    | sed -n 's/^stock-market-backend-\([0-9][0-9]*\)-previous$/\1/p' \
+    | tr '\n' ' ')"
   restore_previous
 fi
 
@@ -126,6 +183,8 @@ fi
 if container_exists "${LEGACY_CONTAINER}"; then
   sudo docker rm -f "${LEGACY_CONTAINER}" >/dev/null 2>&1 || true
 fi
+
+PREVIOUS_SHARD_INDICES="$(running_shard_indices | tr '\n' ' ')"
 
 index=0
 for index in $(seq 0 $((SHARD_COUNT - 1))); do
@@ -151,4 +210,7 @@ done
 for index in $(seq 0 $((SHARD_COUNT - 1))); do
   sudo docker rm -f "$(previous_name "${index}")" >/dev/null 2>&1 || true
 done
+remove_extra_shards
+printf 'SIMULATION_SHARD_COUNT=%s\n' "${SHARD_COUNT}" | sudo tee "${SHARDS_FILE}" >/dev/null
+sudo chmod 600 "${SHARDS_FILE}"
 exit 0

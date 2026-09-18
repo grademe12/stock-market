@@ -41,6 +41,12 @@ SIMULATION_SHARD_INDEX = _env_int(
     minimum=0,
     maximum=7,
 )
+SIMULATION_LISTEN_PORT = _env_int(
+    "PORT",
+    8000,
+    minimum=1,
+    maximum=65535,
+)
 if SIMULATION_SHARD_INDEX >= SIMULATION_SHARD_COUNT:
     raise RuntimeError("SIMULATION_SHARD_INDEX must be less than SIMULATION_SHARD_COUNT")
 ALLOWED_HOSTS = [

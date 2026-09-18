@@ -4,13 +4,13 @@ Prometheus and Grafana run on the mini PC and reach the GCE backend over Tailsca
 
 ## Components
 
-- Prometheus scrapes each matcher shard `/metrics/` every 15 seconds (`:8000`, `:8001`) and retains at most 30 days or 10 GB.
+- Prometheus scrapes each matcher shard `/metrics/` every 15 seconds via `GET /api/v1/prometheus-sd/` on `:8000` and retains at most 30 days or 10 GB. Reload Prometheus after a backend that serves that endpoint is up.
 - Blackbox exporter probes `/api/v1/ready/`, including the backend database check.
 - Grafana provisions the Prometheus datasource and the `Stock Market Backend` dashboard automatically.
 
 The dashboard covers HTTP RPS and status, order POST throughput and p50/p95/p99 latency, runner `http_in_flight` and submit rate, rejected orders, order-book quantity, process CPU and memory, and readiness latency.
 
-Runner containers expose `/metrics` on host ports 9101–9106. Prometheus runs on the host network and scrapes `127.0.0.1:9101`–`9106`.
+Runner containers expose `/metrics` on host ports 9101–9112. Prometheus runs on the host network and scrapes `127.0.0.1:9101`–`9112`.
 
 ## Configure
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Stop the backend VM, change its machine type, and wait until both matcher
+# Stop the backend VM, change its machine type, and wait until matcher
 # shards answer /api/v1/ready/. In-memory books are discarded on stop.
 set -euo pipefail
 
@@ -74,19 +74,30 @@ preflight() {
   docker inspect stock-market-postgres-1 --format '{{.State.Health.Status}}' \
     | grep -qx healthy || die "local Postgres is not healthy"
 
-  remote '
-    set -euo pipefail
-    sudo test -f /etc/stock-market/backend.env
-    sudo docker image inspect stock-market-backend:interval-seconds >/dev/null
-    sudo docker inspect stock-market-backend-0 stock-market-backend-1 \
-      --format "{{.Name}} {{.State.Status}} {{.HostConfig.RestartPolicy.Name}}" \
-      | grep -E "backend-[01] running unless-stopped"
-    tailscale ip -4 >/dev/null
-    curl -sS -m 15 -o /dev/null -w "8000 %{http_code}\n" http://127.0.0.1:8000/api/v1/ready/ \
-      | grep -qx "8000 200"
-    curl -sS -m 15 -o /dev/null -w "8001 %{http_code}\n" http://127.0.0.1:8001/api/v1/ready/ \
-      | grep -qx "8001 200"
-  ' || die "VM preflight failed"
+  remote "$(cat <<'REMOTE'
+set -euo pipefail
+sudo test -f /etc/stock-market/backend.env
+sudo docker image inspect stock-market-backend:interval-seconds >/dev/null
+mapfile -t shards < <(sudo docker ps --format '{{.Names}}' | grep -E '^stock-market-backend-[0-9]+$' | sort)
+test "${#shards[@]}" -ge 1
+for name in "${shards[@]}"; do
+  sudo docker inspect "${name}" --format '{{.State.Status}} {{.HostConfig.RestartPolicy.Name}}' \
+    | grep -qx 'running unless-stopped'
+done
+tailscale ip -4 >/dev/null
+python3 - <<'PY'
+import json
+import urllib.request
+
+with urllib.request.urlopen("http://127.0.0.1:8000/api/v1/ready/", timeout=15) as response:
+    payload = json.load(response)
+if payload.get("status") != "ready":
+    raise SystemExit("shard 0 is not ready")
+for index in range(int(payload["shard_count"])):
+    urllib.request.urlopen(f"http://127.0.0.1:{8000 + index}/api/v1/ready/", timeout=15)
+PY
+REMOTE
+  )" || die "VM preflight failed"
 
   echo "preflight ok current=$(instance_machine_type) target=${TARGET_MACHINE_TYPE}"
 }
@@ -96,15 +107,33 @@ verify() {
   wait_for_ssh
   local i
   for i in $(seq 1 60); do
-    if remote '
-      set -euo pipefail
-      test "$(nproc)" -ge 4
-      tailscale ip -4 >/dev/null
-      sudo docker inspect stock-market-backend-0 stock-market-backend-1 \
-        --format "{{.State.Status}}" | grep -c '^running$' | grep -qx 2
-      curl -sS -m 15 -o /dev/null http://127.0.0.1:8000/api/v1/ready/
-      curl -sS -m 15 -o /dev/null http://127.0.0.1:8001/api/v1/ready/
-    ' >/dev/null 2>&1; then
+    if remote "$(cat <<'REMOTE'
+set -euo pipefail
+test "$(nproc)" -ge 4
+tailscale ip -4 >/dev/null
+python3 - <<'PY'
+import json
+import subprocess
+import urllib.request
+
+with urllib.request.urlopen("http://127.0.0.1:8000/api/v1/ready/", timeout=15) as response:
+    payload = json.load(response)
+if payload.get("status") != "ready":
+    raise SystemExit("shard 0 is not ready")
+shard_count = int(payload["shard_count"])
+running = subprocess.check_output(["sudo", "docker", "ps", "--format", "{{.Names}}"], text=True)
+names = [
+    line
+    for line in running.splitlines()
+    if line.startswith("stock-market-backend-") and line.rsplit("-", 1)[-1].isdigit()
+]
+if len(names) != shard_count:
+    raise SystemExit(f"expected {shard_count} shards, found {len(names)}")
+for index in range(shard_count):
+    urllib.request.urlopen(f"http://127.0.0.1:{8000 + index}/api/v1/ready/", timeout=15)
+PY
+REMOTE
+    )" >/dev/null 2>&1; then
       echo "verify ok machine=$(instance_machine_type) nproc=$(remote nproc)"
       remote 'echo ==== shards ====; sudo docker ps --filter name=stock-market-backend --format "{{.Names}} {{.Status}} {{.Image}}"; echo ==== mem ====; free -h | head -2'
       return 0

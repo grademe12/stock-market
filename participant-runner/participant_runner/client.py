@@ -70,6 +70,12 @@ class BackendApiClient:
         except (KeyError, TypeError, ValueError) as exc:
             raise BackendApiError(None, "order response has an invalid shape") from exc
 
+    def fetch_ready(self) -> dict[str, Any]:
+        payload = self._request("GET", "/api/v1/ready/")
+        if not isinstance(payload, dict):
+            raise BackendApiError(None, "ready response must be an object")
+        return payload
+
     def fetch_matcher_shards(self) -> dict[str, int]:
         payload = self._request("GET", "/api/v1/symbols/?limit=100")
         if not isinstance(payload, dict) or not isinstance(payload.get("results"), list):
