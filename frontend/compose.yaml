@@ -5,6 +5,10 @@ services:
       dockerfile: Dockerfile
     image: stock-market-dashboard:local
     network_mode: host
+    dns:
+      - 100.100.100.100
+    dns_search:
+      - ${TAILSCALE_DNS_SEARCH:?set TAILSCALE_DNS_SEARCH}
     env_file:
       - .env
     environment:
