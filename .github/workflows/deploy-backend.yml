@@ -7,6 +7,7 @@ on:
     paths:
       - backend/**
       - participant-runner/**
+      - gateway/**
       - .github/workflows/deploy-backend.yml
       - infra/scripts/remote-deploy.sh
   push:
@@ -14,6 +15,7 @@ on:
     paths:
       - backend/**
       - participant-runner/**
+      - gateway/**
       - .github/workflows/deploy-backend.yml
       - infra/scripts/remote-deploy.sh
 
@@ -34,7 +36,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Run backend tests
-        run: make backend-setup backend-test participant-runner-test
+        run: make backend-setup backend-test participant-runner-test gateway-test
 
   validate-infra:
     runs-on: ubuntu-latest

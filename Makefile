@@ -42,7 +42,7 @@ RUNNER_STRATEGY_PROJECT = stock-market-runner-$(subst _,-,$(STRATEGY))$(if $(SHA
 RUNNER_STRATEGIES := noise momentum mean_reversion liquidity_provider event_reactive
 RUNNER_UP_FLAGS ?= --build
 
-.PHONY: backend-setup backend-migrate backend-test backend-run participant-runner-test runner-build runners-up runners-down runner-up runner-down runner-status runner-logs noise-runner-up noise-runner-down momentum-runner-up momentum-runner-down mean-reversion-runner-up mean-reversion-runner-down liquidity-provider-runner-up liquidity-provider-runner-down event-reactive-runner-up event-reactive-runner-down db-up db-tailscale-up db-status db-health db-backup db-restore db-migrate import-krx-top100 container-build container-backend-up container-down demo-up demo-seed demo-runner-up demo-logs demo-down load-backend-up load-backend-stats load-steady monitoring-config monitoring-up monitoring-down monitoring-status monitoring-logs after-tailscale after-tailscale-install test run
+.PHONY: backend-setup backend-migrate backend-test backend-run participant-runner-test gateway-test runner-build runners-up runners-down runner-up runner-down runner-status runner-logs noise-runner-up noise-runner-down momentum-runner-up momentum-runner-down mean-reversion-runner-up mean-reversion-runner-down liquidity-provider-runner-up liquidity-provider-runner-down event-reactive-runner-up event-reactive-runner-down db-up db-tailscale-up db-status db-health db-backup db-restore db-migrate import-krx-top100 container-build container-backend-up container-down demo-up demo-seed demo-runner-up demo-logs demo-down load-backend-up load-backend-stats load-steady monitoring-config monitoring-up monitoring-down monitoring-status monitoring-logs after-tailscale after-tailscale-install test run
 backend-setup: ## Create backend virtualenv and install dependencies
 	python3 -m venv $(BACKEND_DIR)/.venv
 	$(BACKEND_PYTHON) -m pip install --upgrade pip
@@ -59,6 +59,9 @@ backend-run: ## Start Django development server
 
 participant-runner-test: ## Run external participant runner tests
 	cd participant-runner && PYTHONPATH=../backend python3 -m unittest discover
+
+gateway-test: ## Run symbol gateway unit tests
+	cd gateway && PYTHONPATH=.:../backend python3 -m unittest discover -s tests
 
 runner-build: ## Build the participant-runner image
 	@test -f participant-runner/.env || { echo "copy participant-runner/.env.example to participant-runner/.env first"; exit 1; }
@@ -253,7 +256,7 @@ after-tailscale-install: ## Install the boot unit that runs after-tailscale
 	sudo systemctl daemon-reload
 	sudo systemctl enable stock-market-after-tailscale.service
 
-test: backend-test ## Alias for backend-test
+test: backend-test gateway-test ## Run backend and gateway tests
 
 run: backend-run ## Alias for backend-run
 
