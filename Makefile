@@ -187,13 +187,13 @@ container-build: ## Build backend and participant-runner container images
 	docker compose build
 
 container-backend-up: ## Start the packaged matcher shard containers
-	docker compose up --build backend backend-1
+	docker compose up --build backend backend-1 gateway
 
 container-down: ## Stop and remove project containers (keeps PostgreSQL volume)
 	docker compose down
 
 demo-up: ## Start the packaged backend for the reproducible demo
-	docker compose up --build -d backend backend-1
+	docker compose up --build -d backend backend-1 gateway
 
 demo-seed: ## Create deterministic demo trader profiles in the running backend
 	docker compose exec -T backend python manage.py seed_traders --strategy $(TRADER_STRATEGY) --count $(TRADER_COUNT) --seed $(TRADER_SEED) $(if $(TRADER_SYMBOL),--symbol $(TRADER_SYMBOL),)
@@ -202,13 +202,13 @@ demo-runner-up: ## Start the external participant runner with the local .env set
 	SCENARIO_PATH=$(SCENARIO_PATH) docker compose --profile runner up --build -d participant-runner
 
 demo-logs: ## Follow backend and runner logs for the demo
-	docker compose --profile runner logs -f backend backend-1 participant-runner
+	docker compose --profile runner logs -f gateway backend backend-1 participant-runner
 
 demo-down: ## Stop the reproducible demo containers (keeps PostgreSQL volume)
 	docker compose --profile runner down
 
 load-backend-up: ## Start backend with execution logs disabled for a load test
-	TRADE_EXECUTION_LOG_ENABLED=0 docker compose up --build -d backend backend-1
+	TRADE_EXECUTION_LOG_ENABLED=0 docker compose up --build -d backend backend-1 gateway
 
 load-backend-stats: ## Print one backend CPU and memory snapshot during a load test
 	@backend_id=$$(docker compose ps -q backend); \

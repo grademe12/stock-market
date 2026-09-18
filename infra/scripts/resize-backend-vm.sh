@@ -77,7 +77,7 @@ preflight() {
   remote "$(cat <<'REMOTE'
 set -euo pipefail
 sudo test -f /etc/stock-market/backend.env
-sudo docker image inspect stock-market-backend:interval-seconds >/dev/null
+sudo docker inspect stock-market-gateway --format '{{.State.Status}}' | grep -qx running
 mapfile -t shards < <(sudo docker ps --format '{{.Names}}' | grep -E '^stock-market-backend-[0-9]+$' | sort)
 test "${#shards[@]}" -ge 1
 for name in "${shards[@]}"; do
@@ -92,9 +92,9 @@ import urllib.request
 with urllib.request.urlopen("http://127.0.0.1:8000/api/v1/ready/", timeout=15) as response:
     payload = json.load(response)
 if payload.get("status") != "ready":
-    raise SystemExit("shard 0 is not ready")
+    raise SystemExit("gateway is not ready")
 for index in range(int(payload["shard_count"])):
-    urllib.request.urlopen(f"http://127.0.0.1:{8000 + index}/api/v1/ready/", timeout=15)
+    urllib.request.urlopen(f"http://127.0.0.1:{8001 + index}/api/v1/ready/", timeout=15)
 PY
 REMOTE
   )" || die "VM preflight failed"
@@ -119,7 +119,7 @@ import urllib.request
 with urllib.request.urlopen("http://127.0.0.1:8000/api/v1/ready/", timeout=15) as response:
     payload = json.load(response)
 if payload.get("status") != "ready":
-    raise SystemExit("shard 0 is not ready")
+    raise SystemExit("gateway is not ready")
 shard_count = int(payload["shard_count"])
 running = subprocess.check_output(["sudo", "docker", "ps", "--format", "{{.Names}}"], text=True)
 names = [
@@ -129,8 +129,10 @@ names = [
 ]
 if len(names) != shard_count:
     raise SystemExit(f"expected {shard_count} shards, found {len(names)}")
+if "stock-market-gateway" not in running.splitlines():
+    raise SystemExit("gateway is not running")
 for index in range(shard_count):
-    urllib.request.urlopen(f"http://127.0.0.1:{8000 + index}/api/v1/ready/", timeout=15)
+    urllib.request.urlopen(f"http://127.0.0.1:{8001 + index}/api/v1/ready/", timeout=15)
 PY
 REMOTE
     )" >/dev/null 2>&1; then

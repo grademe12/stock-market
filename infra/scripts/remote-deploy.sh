@@ -3,6 +3,11 @@ set -euo pipefail
 
 IMAGE="${1:?image}"
 REGISTRY_HOST="${2:?registry host}"
+GATEWAY_IMAGE="${GATEWAY_IMAGE:-${3:-}}"
+if [[ -z "${GATEWAY_IMAGE}" ]]; then
+  echo "set GATEWAY_IMAGE or pass it as the third argument" >&2
+  exit 1
+fi
 
 ENV_FILE=/etc/stock-market/backend.env
 SHARDS_FILE=/etc/stock-market/shards.env
@@ -35,7 +40,7 @@ detect_shard_count() {
 }
 
 SHARD_COUNT="$(detect_shard_count)"
-echo "deploying ${SHARD_COUNT} matcher shard(s) (nproc=$(nproc) pin=${SIMULATION_SHARD_COUNT:-nproc})"
+echo "deploying gateway :8000 and ${SHARD_COUNT} matcher shard(s) on 127.0.0.1:8001+ (nproc=$(nproc) pin=${SIMULATION_SHARD_COUNT:-nproc})"
 
 sudo mkdir -p /etc/stock-market
 sudo chmod 700 /etc/stock-market
@@ -59,12 +64,14 @@ fi
 
 if [[ "${SKIP_PULL:-}" == "1" ]]; then
   sudo docker image inspect "${IMAGE}" >/dev/null
+  sudo docker image inspect "${GATEWAY_IMAGE}" >/dev/null
 else
   registry_token="$(gcloud auth print-access-token)"
   printf '%s' "${registry_token}" \
     | sudo docker login -u oauth2accesstoken --password-stdin "${REGISTRY_HOST}"
   unset registry_token
   sudo docker pull "${IMAGE}"
+  sudo docker pull "${GATEWAY_IMAGE}"
 fi
 
 current_name() {
@@ -75,8 +82,11 @@ previous_name() {
   printf 'stock-market-backend-%s-previous' "$1"
 }
 
+GATEWAY_NAME=stock-market-gateway
+GATEWAY_PREVIOUS_NAME=stock-market-gateway-previous
+
 shard_port() {
-  printf '%s' "$((8000 + $1))"
+  printf '%s' "$((8001 + $1))"
 }
 
 backend_is_ready() {
@@ -148,6 +158,12 @@ restore_previous() {
       sudo docker rm -f "$(current_name "${index}")" >/dev/null 2>&1 || true
     fi
   done
+  sudo docker rm -f "${GATEWAY_NAME}" >/dev/null 2>&1 || true
+  if container_exists "${GATEWAY_PREVIOUS_NAME}"; then
+    sudo docker rename "${GATEWAY_PREVIOUS_NAME}" "${GATEWAY_NAME}"
+    sudo docker start "${GATEWAY_NAME}" >/dev/null
+    echo "previous ${GATEWAY_NAME} restored" >&2
+  fi
 }
 
 start_shard() {
@@ -161,9 +177,24 @@ start_shard() {
     --restart unless-stopped \
     --env-file "${ENV_FILE}" \
     -e "PORT=${port}" \
+    -e "GUNICORN_BIND=127.0.0.1" \
     -e "SIMULATION_SHARD_COUNT=${SHARD_COUNT}" \
     -e "SIMULATION_SHARD_INDEX=${index}" \
     "${IMAGE}"
+}
+
+start_gateway() {
+  sudo docker run -d \
+    --name "${GATEWAY_NAME}" \
+    --network host \
+    --restart unless-stopped \
+    -e "GATEWAY_BIND=0.0.0.0" \
+    -e "GATEWAY_PORT=8000" \
+    -e "GATEWAY_MATCHER_HOST=127.0.0.1" \
+    -e "GATEWAY_FIRST_MATCHER_PORT=8001" \
+    -e "GATEWAY_UNIVERSE_URL=http://127.0.0.1:8001" \
+    -e "SIMULATION_SHARD_COUNT=${SHARD_COUNT}" \
+    "${GATEWAY_IMAGE}"
 }
 
 # Recover a previous interrupted deployment before starting another one.
@@ -186,6 +217,8 @@ fi
 
 PREVIOUS_SHARD_INDICES="$(running_shard_indices | tr '\n' ' ')"
 
+retire_current "${GATEWAY_NAME}" "${GATEWAY_PREVIOUS_NAME}"
+
 index=0
 for index in $(seq 0 $((SHARD_COUNT - 1))); do
   retire_current "$(current_name "${index}")" "$(previous_name "${index}")"
@@ -207,9 +240,21 @@ for index in $(seq 0 $((SHARD_COUNT - 1))); do
   fi
 done
 
+if ! start_gateway; then
+  restore_previous
+  exit 1
+fi
+if ! backend_is_ready 8000; then
+  echo "gateway container logs:" >&2
+  sudo docker logs --tail 80 "${GATEWAY_NAME}" >&2 || true
+  restore_previous
+  exit 1
+fi
+
 for index in $(seq 0 $((SHARD_COUNT - 1))); do
   sudo docker rm -f "$(previous_name "${index}")" >/dev/null 2>&1 || true
 done
+sudo docker rm -f "${GATEWAY_PREVIOUS_NAME}" >/dev/null 2>&1 || true
 remove_extra_shards
 printf 'SIMULATION_SHARD_COUNT=%s\n' "${SHARD_COUNT}" | sudo tee "${SHARDS_FILE}" >/dev/null
 sudo chmod 600 "${SHARDS_FILE}"

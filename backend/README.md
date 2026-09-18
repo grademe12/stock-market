@@ -70,8 +70,9 @@ make demo-seed TRADER_STRATEGY=event_reactive TRADER_COUNT=50
 
 최신 KRX 거래일의 거래대금 상위 N종목을 메모리 호가창으로 처리합니다. N은
 `SIMULATION_SYMBOL_LIMIT`(기본 10, 1~100)입니다. 프로세스 여러 개로 나눌 때는 `SIMULATION_SHARD_COUNT`와
-`SIMULATION_SHARD_INDEX`로 거래대금 순위를 교차 분배합니다. GCE 배포 스크립트는
-별도 pin이 없으면 `nproc`만큼 프로세스를 띄웁니다(최대 8). 참조 데이터가 없으면
+`SIMULATION_SHARD_INDEX`로 거래대금 순위를 교차 분배합니다. 공개 HTTP는
+`gateway` `:8000` 하나이고, matcher는 loopback `:8001`부터 듣습니다. GCE 배포는
+별도 pin이 없으면 `nproc`만큼 matcher를 띄웁니다(최대 8). 참조 데이터가 없으면
 개발용 `005930`만 허용합니다.
 
 | Endpoint | 설명 |

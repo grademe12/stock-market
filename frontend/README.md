@@ -26,7 +26,6 @@ cp .env.example .env
 
 ```dotenv
 BACKEND_BASE_URL=http://stock-market-gce.example-tailnet.ts.net:8000
-BACKEND_SHARD_URLS=http://stock-market-gce.example-tailnet.ts.net:8000,http://stock-market-gce.example-tailnet.ts.net:8001
 FRONTEND_BIND_ADDRESS=127.0.0.1
 ```
 
@@ -47,7 +46,6 @@ LAN이나 인터넷 인터페이스에 대시보드를 공개하지 않는다.
 
 ```dotenv
 BACKEND_BASE_URL=http://stock-market-gce.example-tailnet.ts.net:8000
-BACKEND_SHARD_URLS=http://stock-market-gce.example-tailnet.ts.net:8000,http://stock-market-gce.example-tailnet.ts.net:8001
 FRONTEND_BIND_ADDRESS=100.64.0.1
 ```
 

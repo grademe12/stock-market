@@ -73,14 +73,18 @@ jobs:
           region="${{ vars.GCP_REGION }}"
           repository="${{ vars.ARTIFACT_REGISTRY_REPOSITORY }}"
           image="${region}-docker.pkg.dev/${project}/${repository}/backend"
+          gateway="${region}-docker.pkg.dev/${project}/${repository}/gateway"
           echo "REGISTRY_HOST=${region}-docker.pkg.dev" >> "$GITHUB_ENV"
           echo "IMAGE=${image}:${GITHUB_SHA}" >> "$GITHUB_ENV"
+          echo "GATEWAY_IMAGE=${gateway}:${GITHUB_SHA}" >> "$GITHUB_ENV"
 
-      - name: Build and push backend image
+      - name: Build and push backend and gateway images
         run: |
           gcloud auth configure-docker "${REGISTRY_HOST}" --quiet
           docker build -f backend/Dockerfile -t "${IMAGE}" .
+          docker build -f gateway/Dockerfile -t "${GATEWAY_IMAGE}" .
           docker push "${IMAGE}"
+          docker push "${GATEWAY_IMAGE}"
 
       - name: Deploy image to the backend VM
         env:
@@ -97,4 +101,4 @@ jobs:
             --quiet \
             --tunnel-through-iap \
             --zone "${GCE_ZONE}" \
-            --command "chmod 700 /tmp/remote-deploy.sh && sudo bash /tmp/remote-deploy.sh '${IMAGE}' '${REGISTRY_HOST}'"
+            --command "chmod 700 /tmp/remote-deploy.sh && sudo GATEWAY_IMAGE='${GATEWAY_IMAGE}' bash /tmp/remote-deploy.sh '${IMAGE}' '${REGISTRY_HOST}'"

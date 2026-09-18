@@ -6,6 +6,6 @@
 
 ```bash
 make gateway-test
-GATEWAY_TICKERS=000660,005930 PYTHONPATH=gateway:backend \
-  python3 -m gateway --port 8000 --shard-count 2
+# GCE: matcher는 127.0.0.1:8001+, 공개는 :8000
+# Compose: GATEWAY_SHARD_URLS=http://backend:8000,http://backend-1:8000
 ```

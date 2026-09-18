@@ -139,6 +139,7 @@ Tailnet 정책은 최소한 다음 흐름만 허용한다.
 ```text
 local participant-runner -> stock-market-gce:8000
 tag:stock-market-backend -> local-db:5432
+matcher 프로세스 :8001+ 는 VM loopback만 듣는다.
 ```
 
 ## 5. GitHub Actions 변수와 배포
@@ -157,17 +158,12 @@ workflow는 `main`에서만 배포 토큰을 받을 수 있다. backend·runner 
 검증 후 이미지를 push하고 IAP SSH로 배포한다. VM은 자신의 service account로
 Artifact Registry에 로그인한다.
 
-배포는 `nproc`(최대 8)만큼 `stock-market-backend-0`…을 띄우고 종목을 균등 교차
-분배한다. `SIMULATION_SHARD_COUNT`를 주면 그 수를 쓴다. 이전 컨테이너는
-`*-previous`로 보존하고, 모든 새 샤드의 `/api/v1/ready/`가 확인된 뒤에만 지운다.
-실패하면 복구하고, 줄어든 인덱스의 남은 컨테이너는 성공 후 삭제한다. 메모리
-호가창 특성상 배포 중 주문 상태는 유지되지 않는다.
-
-runner·프론트는 `BACKEND_BASE_URL`만 있어도 `/api/v1/ready/`의 topology로
-`:8000+index` URL을 채운다. 로컬 Compose처럼 호스트 이름이 샤드마다 다르면
-`BACKEND_SHARD_URLS`를 샤드 수와 맞게 적는다.
+배포는 `stock-market-gateway`를 `:8000`에 두고, `nproc`(최대 8)만큼 matcher를
+`127.0.0.1:8001`부터 띄운다. 종목은 순위 교차 분배하고, 공개 라우팅은 gateway가
+한다. `SIMULATION_SHARD_COUNT`를 주면 그 수를 쓴다. 이전 컨테이너는 `*-previous`로
+보존하고, 샤드와 gateway ready가 확인된 뒤에만 지운다. 메모리 호가창은 배포 중
+유지되지 않는다.
 
 ```bash
 BACKEND_BASE_URL=http://stock-market-gce:8000
-BACKEND_SHARD_URLS=http://stock-market-gce:8000
 ```
