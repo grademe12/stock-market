@@ -4,7 +4,7 @@
 >
 > **학습 질문**: 이용자는 URL 하나만 보는데, 같은 종목 호가창은 프로세스 1개로 유지할 수 있는가?
 
-**관련 문서**: [구현 계획](./IMPLEMENTATION_PLAN.md) · [GCP 배포](./GCP_DEPLOYMENT_READINESS.md) · [데모 runbook](./DEMO_RUNBOOK.md) · [Day 4 수직 스케일](../report/DAY4_VERTICAL_SCALE_REPORT.md)
+**관련 문서**: [구현 계획](./IMPLEMENTATION_PLAN.md) · [GCP 배포](./GCP_DEPLOYMENT_READINESS.md) · [데모 runbook](./DEMO_RUNBOOK.md) · [Day 4 수직 스케일](../report/DAY4_VERTICAL_SCALE_REPORT.md) · [Day 5 단일 진입점](../report/DAY5_SINGLE_ENTRY_GATEWAY_REPORT.md)
 
 ---
 

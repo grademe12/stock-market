@@ -112,6 +112,7 @@ KRX 종목 풀은 아직 주문 API와 메모리 호가창에 연결하지 않�
 - [Day 1 부하·병목 보고서](../report/DAY1_LOAD_BOTTLENECK_REPORT.md)
 - [Day 3 매칭기 포화 보고서](../report/DAY3_MATCHER_SATURATION_REPORT.md)
 - [Day 4 수직 스케일 보고서](../report/DAY4_VERTICAL_SCALE_REPORT.md)
+- [Day 5 단일 진입점 보고서](../report/DAY5_SINGLE_ENTRY_GATEWAY_REPORT.md)
 - [참여자 데모 실행 절차](DEMO_RUNBOOK.md)
 - [backend 사용 안내](../backend/README.md)
 - [participant-runner 사용 안내](../participant-runner/README.md)
