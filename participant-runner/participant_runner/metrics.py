@@ -13,8 +13,17 @@ def render_metrics(
     shard: str,
     http_in_flight: int,
     orders_submitted_total: int,
+    events_received_total: int,
+    events_deduplicated_total: int,
+    event_trader_pool_size: int,
+    activated_traders_total: int,
+    reactions_planned_total: int,
+    reactions_submitted_total: int,
+    reactions_dropped_total: int,
+    scheduler_lag_max_ms: int,
 ) -> str:
     labels = f'strategy="{_label_value(strategy)}",shard="{_label_value(shard)}"'
+    scheduler_lag_max_seconds = scheduler_lag_max_ms / 1_000
     return (
         "# HELP runner_http_in_flight In-flight order and cancel HTTP requests.\n"
         "# TYPE runner_http_in_flight gauge\n"
@@ -22,6 +31,30 @@ def render_metrics(
         "# HELP runner_orders_submitted_total Orders this runner successfully submitted.\n"
         "# TYPE runner_orders_submitted_total counter\n"
         f"runner_orders_submitted_total{{{labels}}} {orders_submitted_total}\n"
+        "# HELP runner_events_received_total News shock events accepted by the coordinator.\n"
+        "# TYPE runner_events_received_total counter\n"
+        f"runner_events_received_total{{{labels}}} {events_received_total}\n"
+        "# HELP runner_events_deduplicated_total Duplicate news shock events ignored by the coordinator.\n"
+        "# TYPE runner_events_deduplicated_total counter\n"
+        f"runner_events_deduplicated_total{{{labels}}} {events_deduplicated_total}\n"
+        "# HELP runner_event_trader_pool_size Event-reactive traders registered with the coordinator.\n"
+        "# TYPE runner_event_trader_pool_size gauge\n"
+        f"runner_event_trader_pool_size{{{labels}}} {event_trader_pool_size}\n"
+        "# HELP runner_activated_traders_total Event-reactive trader activations across accepted events.\n"
+        "# TYPE runner_activated_traders_total counter\n"
+        f"runner_activated_traders_total{{{labels}}} {activated_traders_total}\n"
+        "# HELP runner_reactions_planned_total Reaction orders planned by accepted events.\n"
+        "# TYPE runner_reactions_planned_total counter\n"
+        f"runner_reactions_planned_total{{{labels}}} {reactions_planned_total}\n"
+        "# HELP runner_reactions_submitted_total Planned reaction orders successfully submitted.\n"
+        "# TYPE runner_reactions_submitted_total counter\n"
+        f"runner_reactions_submitted_total{{{labels}}} {reactions_submitted_total}\n"
+        "# HELP runner_reactions_dropped_total Planned reaction orders dropped or failed before submission.\n"
+        "# TYPE runner_reactions_dropped_total counter\n"
+        f"runner_reactions_dropped_total{{{labels}}} {reactions_dropped_total}\n"
+        "# HELP runner_scheduler_lag_max_seconds Maximum observed event reaction scheduler lag.\n"
+        "# TYPE runner_scheduler_lag_max_seconds gauge\n"
+        f"runner_scheduler_lag_max_seconds{{{labels}}} {scheduler_lag_max_seconds}\n"
     )
 
 
