@@ -10,6 +10,14 @@ DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
 TRADE_EXECUTION_LOG_ENABLED = os.getenv("TRADE_EXECUTION_LOG_ENABLED", "0") == "1"
 
 
+def _env_choice(name: str, default: str, choices: set[str]) -> str:
+    value = os.getenv(name, default).strip() or default
+    if value not in choices:
+        allowed = ", ".join(sorted(choices))
+        raise RuntimeError(f"{name} must be one of: {allowed}")
+    return value
+
+
 def _env_int(name: str, default: int, *, minimum: int, maximum: int) -> int:
     raw_value = os.getenv(name)
     if raw_value is None or not raw_value.strip():
@@ -23,6 +31,11 @@ def _env_int(name: str, default: int, *, minimum: int, maximum: int) -> int:
     return value
 
 
+SIMULATION_MARKET_MODE = _env_choice(
+    "SIMULATION_MARKET_MODE",
+    "scheduled",
+    {"always_open", "scheduled"},
+)
 SIMULATION_SYMBOL_LIMIT = _env_int(
     "SIMULATION_SYMBOL_LIMIT",
     10,

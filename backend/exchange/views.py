@@ -20,6 +20,7 @@ from exchange.simulation import (
     is_simulated_symbol,
     matcher_shard_for,
 )
+from exchange.market_session import MarketSession
 from exchange.metrics import (
     ORDERBOOK_DEPTH,
     ORDERS_REJECTED,
@@ -106,6 +107,13 @@ def prometheus_service_discovery(request):
 
 @api_view(["POST"])
 def create_order(request):
+    if not MarketSession(settings.SIMULATION_MARKET_MODE).is_open():
+        ORDERS_REJECTED.labels("market_closed").inc()
+        return Response(
+            {"detail": "market is closed"},
+            status=status.HTTP_409_CONFLICT,
+        )
+
     serializer = OrderRequestSerializer(data=request.data)
     if not serializer.is_valid():
         ORDERS_REJECTED.labels("validation_error").inc()

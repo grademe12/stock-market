@@ -207,8 +207,8 @@ demo-logs: ## Follow backend and runner logs for the demo
 demo-down: ## Stop the reproducible demo containers (keeps PostgreSQL volume)
 	docker compose --profile runner down
 
-load-backend-up: ## Start backend with execution logs disabled for a load test
-	TRADE_EXECUTION_LOG_ENABLED=0 docker compose up --build -d backend backend-1 gateway
+load-backend-up: ## Start backend with execution logs disabled and market always open for a load test
+	TRADE_EXECUTION_LOG_ENABLED=0 SIMULATION_MARKET_MODE=always_open docker compose up --build -d backend backend-1 gateway
 
 load-backend-stats: ## Print one backend CPU and memory snapshot during a load test
 	@backend_id=$$(docker compose ps -q backend); \
