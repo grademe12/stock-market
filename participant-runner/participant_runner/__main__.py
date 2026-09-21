@@ -1,13 +1,11 @@
 import argparse
-from dataclasses import asdict, replace
+from dataclasses import asdict
 import logging
 from pathlib import Path
 import signal
 from threading import Event
 
-from exchange.sharding import matcher_topology_from_ready, resolve_matcher_shard_urls
-
-from participant_runner.client import BackendApiClient, BackendApiError, ShardedBackendClient
+from participant_runner.client import BackendApiClient, BackendApiError
 from participant_runner.config import ConfigurationError, RunnerConfig
 from participant_runner.coordinator import EventCoordinator
 from participant_runner.metrics import MetricsServer, render_metrics
@@ -29,35 +27,10 @@ def main() -> int:
 
     try:
         config = RunnerConfig.from_environment()
-        clients = tuple(
-            BackendApiClient(url, config.request_timeout_ms)
-            for url in config.backend_shard_urls
-        )
-        try:
-            shard_index, shard_count, listen_port = matcher_topology_from_ready(
-                clients[0].fetch_ready()
-            )
-            resolved_urls = resolve_matcher_shard_urls(
-                config.backend_shard_urls,
-                shard_index=shard_index,
-                shard_count=shard_count,
-                listen_port=listen_port,
-            )
-        except ValueError as exc:
-            raise ConfigurationError(str(exc)) from exc
-        if resolved_urls != config.backend_shard_urls:
-            config = replace(config, backend_shard_urls=resolved_urls)
-            clients = tuple(
-                BackendApiClient(url, config.request_timeout_ms)
-                for url in resolved_urls
-            )
+        client = BackendApiClient(config.backend_base_url, config.request_timeout_ms)
         symbol_shards: dict[str, int] = {}
-        if config.runner_shard_index is not None or len(clients) > 1:
-            symbol_shards = clients[0].fetch_matcher_shards()
-        if len(clients) == 1:
-            client: BackendApiClient | ShardedBackendClient = clients[0]
-        else:
-            client = ShardedBackendClient(clients, symbol_shards)
+        if config.runner_shard_index is not None:
+            symbol_shards = client.fetch_matcher_shards()
         participants = build_participants(
             client.fetch_trader_profiles(),
             trader_ids=config.trader_ids,
@@ -79,11 +52,11 @@ def main() -> int:
 
     symbols = sorted({participant.symbol for participant in participants})
     logging.info(
-        "loaded %s participant(s) http_concurrency=%s backend_shards=%s "
+        "loaded %s participant(s) http_concurrency=%s backend=%s "
         "runner_shard=%s symbols=%s",
         len(participants),
         config.http_concurrency,
-        ",".join(config.backend_shard_urls),
+        config.backend_base_url,
         config.runner_shard_index if config.runner_shard_index is not None else "all",
         ",".join(symbols) or "-",
     )

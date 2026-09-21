@@ -42,7 +42,7 @@ RUNNER_STRATEGY_PROJECT = stock-market-runner-$(subst _,-,$(STRATEGY))$(if $(SHA
 RUNNER_STRATEGIES := noise momentum mean_reversion liquidity_provider event_reactive
 RUNNER_UP_FLAGS ?= --build
 
-.PHONY: backend-setup backend-migrate backend-test backend-run participant-runner-test runner-build runners-up runners-down runner-up runner-down runner-status runner-logs noise-runner-up noise-runner-down momentum-runner-up momentum-runner-down mean-reversion-runner-up mean-reversion-runner-down liquidity-provider-runner-up liquidity-provider-runner-down event-reactive-runner-up event-reactive-runner-down db-up db-tailscale-up db-status db-health db-backup db-restore db-migrate import-krx-top100 container-build container-backend-up container-down demo-up demo-seed demo-runner-up demo-logs demo-down load-backend-up load-backend-stats load-steady monitoring-config monitoring-up monitoring-down monitoring-status monitoring-logs after-tailscale after-tailscale-install test run
+.PHONY: backend-setup backend-migrate backend-test backend-run participant-runner-test gateway-test runner-build runners-up runners-down runner-up runner-down runner-status runner-logs noise-runner-up noise-runner-down momentum-runner-up momentum-runner-down mean-reversion-runner-up mean-reversion-runner-down liquidity-provider-runner-up liquidity-provider-runner-down event-reactive-runner-up event-reactive-runner-down db-up db-tailscale-up db-status db-health db-backup db-restore db-migrate import-krx-top100 container-build container-backend-up container-down demo-up demo-seed demo-runner-up demo-logs demo-down load-backend-up load-backend-stats load-steady monitoring-config monitoring-up monitoring-down monitoring-status monitoring-logs after-tailscale after-tailscale-install test run
 backend-setup: ## Create backend virtualenv and install dependencies
 	python3 -m venv $(BACKEND_DIR)/.venv
 	$(BACKEND_PYTHON) -m pip install --upgrade pip
@@ -59,6 +59,9 @@ backend-run: ## Start Django development server
 
 participant-runner-test: ## Run external participant runner tests
 	cd participant-runner && PYTHONPATH=../backend python3 -m unittest discover
+
+gateway-test: ## Run symbol gateway unit tests
+	cd gateway && PYTHONPATH=.:../backend python3 -m unittest discover -s tests
 
 runner-build: ## Build the participant-runner image
 	@test -f participant-runner/.env || { echo "copy participant-runner/.env.example to participant-runner/.env first"; exit 1; }
@@ -184,13 +187,13 @@ container-build: ## Build backend and participant-runner container images
 	docker compose build
 
 container-backend-up: ## Start the packaged matcher shard containers
-	docker compose up --build backend backend-1
+	docker compose up --build backend backend-1 gateway
 
 container-down: ## Stop and remove project containers (keeps PostgreSQL volume)
 	docker compose down
 
 demo-up: ## Start the packaged backend for the reproducible demo
-	docker compose up --build -d backend backend-1
+	docker compose up --build -d backend backend-1 gateway
 
 demo-seed: ## Create deterministic demo trader profiles in the running backend
 	docker compose exec -T backend python manage.py seed_traders --strategy $(TRADER_STRATEGY) --count $(TRADER_COUNT) --seed $(TRADER_SEED) $(if $(TRADER_SYMBOL),--symbol $(TRADER_SYMBOL),)
@@ -199,13 +202,13 @@ demo-runner-up: ## Start the external participant runner with the local .env set
 	SCENARIO_PATH=$(SCENARIO_PATH) docker compose --profile runner up --build -d participant-runner
 
 demo-logs: ## Follow backend and runner logs for the demo
-	docker compose --profile runner logs -f backend backend-1 participant-runner
+	docker compose --profile runner logs -f gateway backend backend-1 participant-runner
 
 demo-down: ## Stop the reproducible demo containers (keeps PostgreSQL volume)
 	docker compose --profile runner down
 
 load-backend-up: ## Start backend with execution logs disabled for a load test
-	TRADE_EXECUTION_LOG_ENABLED=0 docker compose up --build -d backend backend-1
+	TRADE_EXECUTION_LOG_ENABLED=0 docker compose up --build -d backend backend-1 gateway
 
 load-backend-stats: ## Print one backend CPU and memory snapshot during a load test
 	@backend_id=$$(docker compose ps -q backend); \
@@ -253,7 +256,7 @@ after-tailscale-install: ## Install the boot unit that runs after-tailscale
 	sudo systemctl daemon-reload
 	sudo systemctl enable stock-market-after-tailscale.service
 
-test: backend-test ## Alias for backend-test
+test: backend-test gateway-test ## Run backend and gateway tests
 
 run: backend-run ## Alias for backend-run
 

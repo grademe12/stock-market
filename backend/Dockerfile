@@ -14,4 +14,4 @@ RUN chmod +x /app/docker-entrypoint.sh
 EXPOSE 8000
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
-CMD ["sh", "-c", "exec gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 1 --threads 4 --timeout 30"]
+CMD ["sh", "-c", "exec gunicorn config.wsgi:application --bind ${GUNICORN_BIND:-0.0.0.0}:${PORT:-8000} --workers 1 --threads 4 --timeout 30"]
