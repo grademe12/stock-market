@@ -134,6 +134,14 @@ def _start_metrics(config: RunnerConfig, runner: ParticipantRunner) -> MetricsSe
             shard=shard,
             http_in_flight=status.http_in_flight,
             orders_submitted_total=status.orders_submitted_total,
+            events_received_total=status.events_received_total,
+            events_deduplicated_total=status.events_deduplicated_total,
+            event_trader_pool_size=status.dormant_traders_total,
+            activated_traders_total=status.activated_traders_total,
+            reactions_planned_total=status.reactions_planned_total,
+            reactions_submitted_total=status.reactions_submitted_total,
+            reactions_dropped_total=status.reactions_dropped_total,
+            scheduler_lag_max_ms=status.scheduler_lag_max_ms,
         )
 
     server = MetricsServer(config.metrics_bind, config.metrics_port, render)

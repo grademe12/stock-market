@@ -41,19 +41,38 @@ class StaticParticipant:
 
 
 class RunnerMetricsTests(TestCase):
-    def test_render_includes_in_flight_and_submitted(self) -> None:
+    def test_render_includes_runner_and_event_metrics(self) -> None:
         text = render_metrics(
-            strategy="noise",
+            strategy="event_reactive",
             shard="0",
             http_in_flight=64,
             orders_submitted_total=12,
+            events_received_total=3,
+            events_deduplicated_total=1,
+            event_trader_pool_size=200,
+            activated_traders_total=125,
+            reactions_planned_total=320,
+            reactions_submitted_total=300,
+            reactions_dropped_total=20,
+            scheduler_lag_max_ms=1_250,
         )
 
-        self.assertIn('runner_http_in_flight{strategy="noise",shard="0"} 64', text)
-        self.assertIn(
-            'runner_orders_submitted_total{strategy="noise",shard="0"} 12',
-            text,
+        labels = 'strategy="event_reactive",shard="0"'
+        expected = (
+            ("runner_http_in_flight", "gauge", "64"),
+            ("runner_orders_submitted_total", "counter", "12"),
+            ("runner_events_received_total", "counter", "3"),
+            ("runner_events_deduplicated_total", "counter", "1"),
+            ("runner_event_trader_pool_size", "gauge", "200"),
+            ("runner_activated_traders_total", "counter", "125"),
+            ("runner_reactions_planned_total", "counter", "320"),
+            ("runner_reactions_submitted_total", "counter", "300"),
+            ("runner_reactions_dropped_total", "counter", "20"),
+            ("runner_scheduler_lag_max_seconds", "gauge", "1.25"),
         )
+        for metric, metric_type, value in expected:
+            self.assertIn(f"# TYPE {metric} {metric_type}", text)
+            self.assertIn(f"{metric}{{{labels}}} {value}", text)
 
     def test_metrics_http_reads_runner_status(self) -> None:
         runner = ParticipantRunner(FakeBackend(), (StaticParticipant(),), http_concurrency=1)
@@ -65,6 +84,14 @@ class RunnerMetricsTests(TestCase):
                 shard="all",
                 http_in_flight=status.http_in_flight,
                 orders_submitted_total=status.orders_submitted_total,
+                events_received_total=status.events_received_total,
+                events_deduplicated_total=status.events_deduplicated_total,
+                event_trader_pool_size=status.dormant_traders_total,
+                activated_traders_total=status.activated_traders_total,
+                reactions_planned_total=status.reactions_planned_total,
+                reactions_submitted_total=status.reactions_submitted_total,
+                reactions_dropped_total=status.reactions_dropped_total,
+                scheduler_lag_max_ms=status.scheduler_lag_max_ms,
             )
 
         server = MetricsServer("127.0.0.1", 0, render)
@@ -78,8 +105,9 @@ class RunnerMetricsTests(TestCase):
             server.stop()
             runner.close()
 
-        self.assertIn('runner_http_in_flight{strategy="noise",shard="all"} 0', body)
-        self.assertIn(
-            'runner_orders_submitted_total{strategy="noise",shard="all"} 1',
-            body,
-        )
+        labels = 'strategy="noise",shard="all"'
+        self.assertIn(f"runner_http_in_flight{{{labels}}} 0", body)
+        self.assertIn(f"runner_orders_submitted_total{{{labels}}} 1", body)
+        self.assertIn(f"runner_events_received_total{{{labels}}} 0", body)
+        self.assertIn(f"runner_event_trader_pool_size{{{labels}}} 0", body)
+        self.assertIn(f"runner_scheduler_lag_max_seconds{{{labels}}} 0.0", body)
