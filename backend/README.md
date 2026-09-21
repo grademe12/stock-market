@@ -84,7 +84,7 @@ make demo-seed TRADER_STRATEGY=event_reactive TRADER_COUNT=50
 | `GET /api/v1/symbols/?q=삼성&limit=20` | 최신 KRX 상위 100종목 검색 |
 | `GET /api/v1/health/` | 프로세스 liveness 확인 |
 | `GET /api/v1/ready/` | 데이터베이스 연결과 샤드 topology(`shard_index`, `shard_count`, `listen_port`) |
-| `GET /api/v1/prometheus-sd/` | Prometheus HTTP SD. host-network 샤드 `:8000+index` |
+| `GET /api/v1/prometheus-sd/` | Prometheus HTTP SD. 게이트웨이는 `:8000`과 `/metrics/{shard}/`를 광고한다 |
 | `GET` / `POST /api/v1/traders/` | 트레이더 환경설정 목록 조회 / 생성 |
 | `GET` / `PATCH` / `DELETE /api/v1/traders/{trader_id}/` | 개별 트레이더 환경설정 조회 / 수정 / 삭제 |
 

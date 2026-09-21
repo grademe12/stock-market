@@ -82,3 +82,18 @@ class GatewayRoutingTests(TestCase):
     def test_matcher_ports_start_after_the_gateway(self) -> None:
         self.assertEqual(matcher_listen_port(0), 8001)
         self.assertEqual(matcher_listen_port(3), 8004)
+
+    def test_metrics_path_selects_shard_and_rewrites_upstream(self) -> None:
+        route = self.route("GET", "/metrics/2/")
+        self.assertEqual(route.shard_index, 2)
+        self.assertEqual(route.upstream_path, "/metrics/")
+
+    def test_ready_path_selects_shard(self) -> None:
+        route = self.route("GET", "/api/v1/ready/1")
+        self.assertEqual(route.shard_index, 1)
+        self.assertEqual(route.upstream_path, "/api/v1/ready/")
+
+    def test_unknown_shard_metrics_are_rejected(self) -> None:
+        with self.assertRaises(RoutingError) as raised:
+            self.route("GET", "/metrics/4/")
+        self.assertEqual(raised.exception.status, 404)

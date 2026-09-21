@@ -15,6 +15,12 @@ scrape_configs:
     http_sd_configs:
       - url: http://stock-market-gce:8000/api/v1/prometheus-sd/
         refresh_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__, matcher_shard]
+        separator: ;
+        regex: (.+);(\d+)
+        replacement: $1/shard/$2
+        target_label: instance
 
   - job_name: stock-market-backend-readiness
     metrics_path: /probe
@@ -24,14 +30,17 @@ scrape_configs:
       - url: http://stock-market-gce:8000/api/v1/prometheus-sd/
         refresh_interval: 30s
     relabel_configs:
-      - source_labels: [__address__]
-        regex: (.+)
-        replacement: http://$1/api/v1/ready/
+      - source_labels: [__address__, matcher_shard]
+        separator: ;
+        regex: (.+);(\d+)
+        replacement: http://$1/api/v1/ready/$2/
         target_label: __param_target
       - source_labels: [__param_target]
         target_label: instance
       - target_label: __address__
         replacement: 127.0.0.1:9115
+      - target_label: __metrics_path__
+        replacement: /probe
 
   - job_name: stock-market-runner
     metrics_path: /metrics

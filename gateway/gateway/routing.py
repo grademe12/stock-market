@@ -14,12 +14,14 @@ BOOK_PATH = re.compile(r"^/api/v1/books/(\d{6})/?$")
 ORDER_CREATE_PATH = re.compile(r"^/api/v1/orders/?$")
 ORDER_CANCEL_PATH = re.compile(r"^/api/v1/orders/[0-9a-fA-F-]+/?$")
 TRADES_PATH = re.compile(r"^/api/v1/trades/?$")
+METRICS_SHARD_PATH = re.compile(r"^/metrics/(\d+)/?$")
+READY_SHARD_PATH = re.compile(r"^/api/v1/ready/(\d+)/?$")
+SERVICE_DISCOVERY_PATH = re.compile(r"^/api/v1/prometheus-sd/?$")
 DEFAULT_SHARD_PATHS = (
     re.compile(r"^/api/v1/health/?$"),
     re.compile(r"^/api/v1/ready/?$"),
     re.compile(r"^/api/v1/symbols/?$"),
     re.compile(r"^/api/v1/traders(?:/[0-9a-fA-F-]+)?/?$"),
-    re.compile(r"^/api/v1/prometheus-sd/?$"),
     re.compile(r"^/metrics/?$"),
 )
 
@@ -35,6 +37,7 @@ class RoutingError(Exception):
 class Route:
     shard_index: int
     symbol: str | None
+    upstream_path: str | None = None
 
 
 def matcher_listen_port(shard_index: int, *, first_port: int = 8001) -> int:
@@ -59,6 +62,10 @@ def route_request(
         raise RoutingError(500, "shard_count must be at least 1")
     normalized_method = method.upper()
     normalized_path = path if path.startswith("/") else f"/{path}"
+
+    shard_route = _route_for_indexed_shard(normalized_method, normalized_path, shard_count)
+    if shard_route is not None:
+        return shard_route
 
     if any(pattern.match(normalized_path) for pattern in DEFAULT_SHARD_PATHS):
         return Route(shard_index=0, symbol=None)
@@ -96,6 +103,38 @@ def _symbol_from_request(
         return _required_query_symbol(query)
 
     raise RoutingError(404, "gateway route is not allowed")
+
+
+def is_service_discovery_path(path: str) -> bool:
+    normalized = path if path.startswith("/") else f"/{path}"
+    return SERVICE_DISCOVERY_PATH.match(normalized) is not None
+
+
+def _route_for_indexed_shard(method: str, path: str, shard_count: int) -> Route | None:
+    if method != "GET":
+        return None
+    metrics_match = METRICS_SHARD_PATH.match(path)
+    if metrics_match:
+        return Route(
+            shard_index=_require_shard_index(metrics_match.group(1), shard_count),
+            symbol=None,
+            upstream_path="/metrics/",
+        )
+    ready_match = READY_SHARD_PATH.match(path)
+    if ready_match:
+        return Route(
+            shard_index=_require_shard_index(ready_match.group(1), shard_count),
+            symbol=None,
+            upstream_path="/api/v1/ready/",
+        )
+    return None
+
+
+def _require_shard_index(raw: str, shard_count: int) -> int:
+    index = int(raw)
+    if not 0 <= index < shard_count:
+        raise RoutingError(404, "unknown matcher shard")
+    return index
 
 
 def _required_query_symbol(query: str) -> str:

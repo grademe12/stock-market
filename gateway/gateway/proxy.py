@@ -7,7 +7,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from urllib.parse import urlparse, urlsplit
 
-from gateway.routing import RoutingError, matcher_listen_port, route_request
+from gateway.discovery import advertised_scrape_target, prometheus_sd_targets
+from gateway.routing import (
+    RoutingError,
+    is_service_discovery_path,
+    matcher_listen_port,
+    route_request,
+)
 
 
 class GatewayHandler(BaseHTTPRequestHandler):
@@ -16,6 +22,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
     matcher_host: str = "127.0.0.1"
     first_matcher_port: int = 8001
     shard_urls: tuple[str, ...] = ()
+    public_port: int = 8000
     timeout_seconds: float = 5.0
 
     def do_GET(self) -> None:
@@ -37,6 +44,9 @@ class GatewayHandler(BaseHTTPRequestHandler):
         parsed = urlsplit(self.path)
         length = int(self.headers.get("Content-Length", "0") or "0")
         body = self.rfile.read(length) if length else b""
+        if self.command == "GET" and is_service_discovery_path(parsed.path):
+            self._write_service_discovery()
+            return
         try:
             route = route_request(
                 self.command,
@@ -57,8 +67,9 @@ class GatewayHandler(BaseHTTPRequestHandler):
             for key, value in self.headers.items()
             if key.lower() not in {"content-length"}
         }
+        request_path = self._upstream_request_path(parsed, route.upstream_path)
         try:
-            connection.request(self.command, self.path, body=body or None, headers=headers)
+            connection.request(self.command, request_path, body=body or None, headers=headers)
             upstream = connection.getresponse()
             payload = upstream.read()
             self.send_response(upstream.status)
@@ -84,6 +95,26 @@ class GatewayHandler(BaseHTTPRequestHandler):
             first_port=self.first_matcher_port,
         )
 
+    def _upstream_request_path(self, parsed, upstream_path: str | None) -> str:
+        if not upstream_path:
+            return self.path
+        if parsed.query:
+            return f"{upstream_path}?{parsed.query}"
+        return upstream_path
+
+    def _write_service_discovery(self) -> None:
+        try:
+            target = advertised_scrape_target(self.headers.get("Host", ""), self.public_port)
+        except ValueError:
+            self._write_error(400, "host header is required")
+            return
+        payload = json.dumps(prometheus_sd_targets(target, self.shard_count)).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
     def _write_error(self, status: int, detail: str) -> None:
         payload = json.dumps({"detail": detail}).encode("utf-8")
         self.send_response(status)
@@ -100,6 +131,7 @@ def make_handler(
     matcher_host: str = "127.0.0.1",
     first_matcher_port: int = 8001,
     shard_urls: tuple[str, ...] = (),
+    public_port: int = 8000,
     timeout_seconds: float = 5.0,
 ) -> type[GatewayHandler]:
     class BoundHandler(GatewayHandler):
@@ -110,6 +142,7 @@ def make_handler(
     BoundHandler.matcher_host = matcher_host
     BoundHandler.first_matcher_port = first_matcher_port
     BoundHandler.shard_urls = shard_urls
+    BoundHandler.public_port = public_port
     BoundHandler.timeout_seconds = timeout_seconds
     return BoundHandler
 
@@ -130,6 +163,7 @@ def serve(
         matcher_host=matcher_host,
         first_matcher_port=first_matcher_port,
         shard_urls=shard_urls,
+        public_port=port,
     )
     server = ThreadingHTTPServer((bind, port), handler)
     server.serve_forever()
