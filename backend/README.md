@@ -90,7 +90,7 @@ make demo-seed TRADER_STRATEGY=event_reactive TRADER_COUNT=50
 
 주문 API의 입력은 `user_id`, `symbol`, `side` (`BUY` 또는 `SELL`), `price`, `qty`다. 가격과 수량은 양의 정수만 허용한다.
 
-기본 `SIMULATION_MARKET_MODE=scheduled`에서는 KST 평일 09:00 이상 15:30 미만에만 신규 주문을 받는다. 장외 `POST /api/v1/orders/`는 HTTP 409와 `{"detail":"market is closed"}`로 거절되며, 조회와 주문 취소 API는 계속 사용할 수 있다. 실제 KRX 공휴일 달력은 아직 반영하지 않는다. 인프라 부하 실험처럼 시간 제한이 불필요한 경우에만 `SIMULATION_MARKET_MODE=always_open`을 명시한다. `make load-backend-up`은 이 실험 모드를 자동으로 사용한다.
+기본 `SIMULATION_MARKET_MODE=scheduled`에서는 KST 평일 09:00 이상 15:30 미만에만 신규 주문을 받는다. 장외 `POST /api/v1/orders/`는 HTTP 409와 `{"detail":"market is closed"}`로 거절되며, 조회와 주문 취소 API는 계속 사용할 수 있다. 새 평일 거래일을 처음 인지하면 matcher는 이전 거래일의 in-memory 호가, 최근 체결, order-id map을 비우고 해당 종목의 `orderbook_depth` metric도 0으로 맞춘다. 실제 KRX 공휴일 달력은 아직 반영하지 않는다. 인프라 부하 실험처럼 시간 제한이 불필요한 경우에만 `SIMULATION_MARKET_MODE=always_open`을 명시하며, 이 모드에서는 날짜 기반 rollover도 수행하지 않는다. `make load-backend-up`은 이 실험 모드를 자동으로 사용한다.
 
 주문 취소는 idempotent하다. 열린 주문은 `status: CANCELED`로 취소되고, 이미 체결·취소되어 호가창에 없는 주문은 `status: ALREADY_CLOSED`로 정상 응답한다. 이는 TTL 기반 runner의 지연 취소를 오류와 구분하기 위한 현재 단계의 계약이다.
 
