@@ -1,3 +1,4 @@
+from datetime import date
 from threading import RLock
 from uuid import UUID
 
@@ -13,12 +14,39 @@ class OrderBookRegistry:
         self._lock = RLock()
         self._books: dict[str, OrderBook] = {}
         self._order_symbols: dict[UUID, str] = {}
+        self._active_session_date: date | None = None
 
     def reset(self) -> None:
+        """Reset test/development state including the simulated-symbol cache."""
         reset_simulated_tickers_cache()
+        self.reset_books()
+
+    def reset_books(self) -> tuple[str, ...]:
+        """Clear in-memory matching state without invalidating the symbol universe."""
         with self._lock:
+            cleared_symbols = tuple(self._books)
             self._books.clear()
             self._order_symbols.clear()
+            self._active_session_date = None
+            return cleared_symbols
+
+    def rollover(self, session_date: date | None) -> tuple[str, ...]:
+        """Start a newer trading session and return symbols whose books were cleared."""
+        if session_date is None:
+            return ()
+
+        with self._lock:
+            if self._active_session_date is None:
+                self._active_session_date = session_date
+                return ()
+            if session_date <= self._active_session_date:
+                return ()
+
+            cleared_symbols = tuple(self._books)
+            self._books.clear()
+            self._order_symbols.clear()
+            self._active_session_date = session_date
+            return cleared_symbols
 
     def get(self, symbol: str) -> OrderBook | None:
         if not is_owned_symbol(symbol):

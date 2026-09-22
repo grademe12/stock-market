@@ -20,7 +20,7 @@ from exchange.simulation import (
     is_simulated_symbol,
     matcher_shard_for,
 )
-from exchange.market_session import MarketSession
+from exchange.market_session import ALWAYS_OPEN, MarketSession
 from exchange.metrics import (
     ORDERBOOK_DEPTH,
     ORDERS_REJECTED,
@@ -40,6 +40,27 @@ from exchange.serializers import (
 
 SIMULATION_SYMBOL = FALLBACK_SYMBOL
 execution_logger = logging.getLogger("exchange.execution")
+
+
+def _rollover_market_session() -> None:
+    if settings.SIMULATION_MARKET_MODE == ALWAYS_OPEN:
+        return
+
+    session = MarketSession(settings.SIMULATION_MARKET_MODE)
+    session_date = session.session_date()
+    cleared_symbols = books.rollover(session_date)
+    if not cleared_symbols:
+        return
+
+    for symbol in cleared_symbols:
+        for side in OrderSide:
+            ORDERBOOK_DEPTH.labels(symbol, side.value).set(0)
+
+    logging.info(
+        "event=market_session_rollover session_date=%s cleared_symbols=%s",
+        session_date.isoformat() if session_date is not None else "-",
+        len(cleared_symbols),
+    )
 
 
 def _update_orderbook_depth(symbol: str) -> None:
@@ -114,6 +135,8 @@ def create_order(request):
             status=status.HTTP_409_CONFLICT,
         )
 
+    _rollover_market_session()
+
     serializer = OrderRequestSerializer(data=request.data)
     if not serializer.is_valid():
         ORDERS_REJECTED.labels("validation_error").inc()
@@ -143,6 +166,7 @@ def create_order(request):
 
 @api_view(["GET"])
 def book_detail(request, symbol: str):
+    _rollover_market_session()
     book = books.get(symbol)
     if book is None:
         raise NotFound("symbol was not found")
@@ -152,6 +176,7 @@ def book_detail(request, symbol: str):
 
 @api_view(["GET"])
 def recent_trade_list(request):
+    _rollover_market_session()
     query = RecentTradeQuerySerializer(data=request.query_params)
     query.is_valid(raise_exception=True)
     symbol = query.validated_data["symbol"]
@@ -210,6 +235,7 @@ def symbol_list(request):
 
 @api_view(["DELETE"])
 def cancel_order(request, order_id: UUID):
+    _rollover_market_session()
     symbol = (request.query_params.get("symbol") or "").strip()
     if symbol:
         if not is_simulated_symbol(symbol):
