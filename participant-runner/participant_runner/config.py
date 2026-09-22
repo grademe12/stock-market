@@ -2,6 +2,7 @@ from dataclasses import dataclass
 import os
 from pathlib import Path
 
+from exchange.market_session import SCHEDULED, SUPPORTED_MARKET_MODES
 from exchange.participants.types import SUPPORTED_STRATEGIES
 
 
@@ -11,6 +12,14 @@ class ConfigurationError(ValueError):
 
 HTTP_CONCURRENCY_DEFAULT = 16
 HTTP_CONCURRENCY_MAXIMUM = 128
+
+
+def _choice(name: str, default: str, choices: set[str] | frozenset[str]) -> str:
+    value = os.getenv(name, default).strip() or default
+    if value not in choices:
+        allowed = ", ".join(sorted(choices))
+        raise ConfigurationError(f"{name} must be one of: {allowed}")
+    return value
 
 
 def _parse_int(name: str, raw_value: str) -> int:
@@ -53,6 +62,7 @@ class RunnerConfig:
 
     backend_base_url: str
     backend_shard_urls: tuple[str, ...]
+    simulation_market_mode: str
     tick_interval_ms: int
     request_timeout_ms: int
     status_log_interval_ticks: int
@@ -113,6 +123,11 @@ class RunnerConfig:
         return cls(
             backend_base_url=backend_base_url,
             backend_shard_urls=backend_shard_urls,
+            simulation_market_mode=_choice(
+                "SIMULATION_MARKET_MODE",
+                SCHEDULED,
+                SUPPORTED_MARKET_MODES,
+            ),
             tick_interval_ms=_positive_int("TICK_INTERVAL_MS", 1_000) or 1_000,
             request_timeout_ms=_positive_int("REQUEST_TIMEOUT_MS", 5_000) or 5_000,
             status_log_interval_ticks=(
