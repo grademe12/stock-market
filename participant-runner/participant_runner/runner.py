@@ -66,6 +66,9 @@ class RunnerStatus:
     reactions_submitted_total: int = 0
     reactions_dropped_total: int = 0
     scheduler_lag_max_ms: int = 0
+    market_session_open: bool = False
+    market_session_open_transitions_total: int = 0
+    market_session_close_transitions_total: int = 0
 
 
 class ParticipantRunner:
@@ -97,6 +100,19 @@ class ParticipantRunner:
         self._orders_canceled = 0
         self._orders_already_closed = 0
         self._request_failures = 0
+        self._market_session_open = False
+        self._market_session_open_transitions = 0
+        self._market_session_close_transitions = 0
+
+    def set_market_session_open(self, is_open: bool) -> None:
+        with self._lock:
+            if self._market_session_open == is_open:
+                return
+            self._market_session_open = is_open
+            if is_open:
+                self._market_session_open_transitions += 1
+            else:
+                self._market_session_close_transitions += 1
 
     def tick_once(self) -> RunnerStatus:
         self._tick += 1
@@ -255,6 +271,9 @@ class ParticipantRunner:
             orders_already_closed_total = self._orders_already_closed
             request_failures_total = self._request_failures
             http_in_flight = self._pending
+            market_session_open = self._market_session_open
+            market_session_open_transitions_total = self._market_session_open_transitions
+            market_session_close_transitions_total = self._market_session_close_transitions
             event_status = self._coordinator_status_locked()
         return RunnerStatus(
             ticks_total=self._tick,
@@ -272,6 +291,9 @@ class ParticipantRunner:
             reactions_submitted_total=event_status.reactions_submitted_total,
             reactions_dropped_total=event_status.reactions_dropped_total,
             scheduler_lag_max_ms=event_status.scheduler_lag_max_ms,
+            market_session_open=market_session_open,
+            market_session_open_transitions_total=market_session_open_transitions_total,
+            market_session_close_transitions_total=market_session_close_transitions_total,
         )
 
     def _coordinator_status_locked(self) -> CoordinatorStatus:
@@ -347,6 +369,7 @@ def run_until_stopped(
                         before_close.open_runner_orders - after_close.open_runner_orders,
                     )
                     session_date = market_session.session_date(now)
+                    runner.set_market_session_open(False)
                     logging.info(
                         "event=runner_market_close session_date=%s cleaned_orders=%s",
                         session_date.isoformat() if session_date is not None else "-",
@@ -361,6 +384,7 @@ def run_until_stopped(
                 continue
 
             if not was_open:
+                runner.set_market_session_open(True)
                 session_date = market_session.session_date(now)
                 logging.info(
                     "event=runner_market_open session_date=%s",
