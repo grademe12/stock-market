@@ -76,6 +76,7 @@ class ReadinessEndpointTests(APITestCase):
         )
 
 
+@override_settings(SIMULATION_MARKET_MODE="always_open")
 class OrderApiTests(APITestCase):
     def setUp(self) -> None:
         books.reset()
@@ -482,6 +483,7 @@ class SeedTradersCommandTests(APITestCase):
         self.assertEqual(TraderProfile.objects.count(), 0)
 
 
+@override_settings(SIMULATION_MARKET_MODE="always_open")
 class MatcherShardApiTests(APITestCase):
     latest_trade_date = date(2026, 8, 28)
 

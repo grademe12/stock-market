@@ -90,6 +90,8 @@ make demo-seed TRADER_STRATEGY=event_reactive TRADER_COUNT=50
 
 주문 API의 입력은 `user_id`, `symbol`, `side` (`BUY` 또는 `SELL`), `price`, `qty`다. 가격과 수량은 양의 정수만 허용한다.
 
+기본 `SIMULATION_MARKET_MODE=scheduled`에서는 KST 평일 09:00 이상 15:30 미만에만 신규 주문을 받는다. 장외 `POST /api/v1/orders/`는 HTTP 409와 `{"detail":"market is closed"}`로 거절되며, 조회와 주문 취소 API는 계속 사용할 수 있다. 실제 KRX 공휴일 달력은 아직 반영하지 않는다. 인프라 부하 실험처럼 시간 제한이 불필요한 경우에만 `SIMULATION_MARKET_MODE=always_open`을 명시한다. `make load-backend-up`은 이 실험 모드를 자동으로 사용한다.
+
 주문 취소는 idempotent하다. 열린 주문은 `status: CANCELED`로 취소되고, 이미 체결·취소되어 호가창에 없는 주문은 `status: ALREADY_CLOSED`로 정상 응답한다. 이는 TTL 기반 runner의 지연 취소를 오류와 구분하기 위한 현재 단계의 계약이다.
 
 최근 체결 API는 matcher가 종목별로 메모리에 보관하는 최대 200건을 최신순으로 반환한다. `limit`은 기본 50, 최대 200이다. 체결에는 UTC `executed_at`이 포함되며 backend 재시작 시 호가창과 함께 초기화된다.
