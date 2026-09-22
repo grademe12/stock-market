@@ -21,6 +21,9 @@ def render_metrics(
     reactions_submitted_total: int,
     reactions_dropped_total: int,
     scheduler_lag_max_ms: int,
+    market_session_open: bool,
+    market_session_open_transitions_total: int,
+    market_session_close_transitions_total: int,
 ) -> str:
     labels = f'strategy="{_label_value(strategy)}",shard="{_label_value(shard)}"'
     scheduler_lag_max_seconds = scheduler_lag_max_ms / 1_000
@@ -55,6 +58,13 @@ def render_metrics(
         "# HELP runner_scheduler_lag_max_seconds Maximum observed event reaction scheduler lag.\n"
         "# TYPE runner_scheduler_lag_max_seconds gauge\n"
         f"runner_scheduler_lag_max_seconds{{{labels}}} {scheduler_lag_max_seconds}\n"
+        "# HELP runner_market_session_open Whether this runner currently considers the market session open.\n"
+        "# TYPE runner_market_session_open gauge\n"
+        f"runner_market_session_open{{{labels}}} {1 if market_session_open else 0}\n"
+        "# HELP runner_market_session_transitions_total Market session transitions observed by this runner.\n"
+        "# TYPE runner_market_session_transitions_total counter\n"
+        f"runner_market_session_transitions_total{{{labels},transition=\"open\"}} {market_session_open_transitions_total}\n"
+        f"runner_market_session_transitions_total{{{labels},transition=\"close\"}} {market_session_close_transitions_total}\n"
     )
 
 

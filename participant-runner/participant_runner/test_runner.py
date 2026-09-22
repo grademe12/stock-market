@@ -370,6 +370,19 @@ class ParticipantRunnerTests(TestCase):
         self.assertEqual(status.orders_canceled_total, 1)
         self.assertEqual(status.open_runner_orders, 0)
 
+    def test_market_session_state_changes_are_idempotent(self) -> None:
+        runner = self.start_runner(FakeBackendClient(), ())
+
+        runner.set_market_session_open(True)
+        runner.set_market_session_open(True)
+        runner.set_market_session_open(False)
+        runner.set_market_session_open(False)
+        status = runner.status()
+
+        self.assertFalse(status.market_session_open)
+        self.assertEqual(status.market_session_open_transitions_total, 1)
+        self.assertEqual(status.market_session_close_transitions_total, 1)
+
     def test_scheduled_runner_waits_until_open_before_first_tick(self) -> None:
         client = FakeBackendClient()
         runner = ParticipantRunner(client, (StaticParticipant((buy_intent(),)),))
@@ -390,6 +403,9 @@ class ParticipantRunnerTests(TestCase):
         self.assertEqual(status.ticks_total, 1)
         self.assertEqual(len(client.submissions), 1)
         self.assertEqual(stop_event.wait_timeouts[0], 1.0)
+        self.assertTrue(status.market_session_open)
+        self.assertEqual(status.market_session_open_transitions_total, 1)
+        self.assertEqual(status.market_session_close_transitions_total, 0)
 
     def test_market_close_cleans_orders_once_and_stops_new_ticks(self) -> None:
         client = FakeBackendClient()
@@ -416,6 +432,9 @@ class ParticipantRunnerTests(TestCase):
         self.assertEqual(len(client.submissions), 1)
         self.assertEqual(client.canceled_order_ids, ["order-1"])
         self.assertEqual(status.open_runner_orders, 0)
+        self.assertFalse(status.market_session_open)
+        self.assertEqual(status.market_session_open_transitions_total, 1)
+        self.assertEqual(status.market_session_close_transitions_total, 1)
         self.assertEqual(
             sum("event=runner_market_close" in line for line in logs.output),
             1,

@@ -161,6 +161,32 @@
       "targets": [{ "expr": "sum by (strategy, shard) (rate(runner_orders_submitted_total[1m]))", "legendFormat": "{{strategy}} shard={{shard}}", "refId": "A" }],
       "title": "Runner orders submitted / second",
       "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{ "type": "value", "options": { "0": { "text": "CLOSED" }, "1": { "text": "OPEN" } } }],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 12, "x": 0, "y": 52 },
+      "id": 16,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "showPercentChange": false, "textMode": "auto", "wideLayout": true },
+      "targets": [{ "expr": "min(runner_market_session_open)", "legendFormat": "all runners", "refId": "A" }],
+      "title": "Runner market session",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 52 },
+      "id": 17,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [{ "expr": "max by (transition) (runner_market_session_transitions_total)", "legendFormat": "{{transition}}", "refId": "A" }],
+      "title": "Runner market session transitions",
+      "type": "timeseries"
     }
   ],
   "refresh": "10s",
@@ -171,5 +197,5 @@
   "timezone": "browser",
   "title": "Stock Market Backend",
   "uid": "stock-market-backend",
-  "version": 3
+  "version": 4
 }

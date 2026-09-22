@@ -55,6 +55,9 @@ class RunnerMetricsTests(TestCase):
             reactions_submitted_total=300,
             reactions_dropped_total=20,
             scheduler_lag_max_ms=1_250,
+            market_session_open=True,
+            market_session_open_transitions_total=2,
+            market_session_close_transitions_total=1,
         )
 
         labels = 'strategy="event_reactive",shard="0"'
@@ -69,10 +72,24 @@ class RunnerMetricsTests(TestCase):
             ("runner_reactions_submitted_total", "counter", "300"),
             ("runner_reactions_dropped_total", "counter", "20"),
             ("runner_scheduler_lag_max_seconds", "gauge", "1.25"),
+            ("runner_market_session_open", "gauge", "1"),
         )
         for metric, metric_type, value in expected:
             self.assertIn(f"# TYPE {metric} {metric_type}", text)
             self.assertIn(f"{metric}{{{labels}}} {value}", text)
+
+        self.assertIn(
+            "# TYPE runner_market_session_transitions_total counter",
+            text,
+        )
+        self.assertIn(
+            f'runner_market_session_transitions_total{{{labels},transition="open"}} 2',
+            text,
+        )
+        self.assertIn(
+            f'runner_market_session_transitions_total{{{labels},transition="close"}} 1',
+            text,
+        )
 
     def test_metrics_http_reads_runner_status(self) -> None:
         runner = ParticipantRunner(FakeBackend(), (StaticParticipant(),), http_concurrency=1)
@@ -92,6 +109,9 @@ class RunnerMetricsTests(TestCase):
                 reactions_submitted_total=status.reactions_submitted_total,
                 reactions_dropped_total=status.reactions_dropped_total,
                 scheduler_lag_max_ms=status.scheduler_lag_max_ms,
+                market_session_open=status.market_session_open,
+                market_session_open_transitions_total=status.market_session_open_transitions_total,
+                market_session_close_transitions_total=status.market_session_close_transitions_total,
             )
 
         server = MetricsServer("127.0.0.1", 0, render)
@@ -111,3 +131,12 @@ class RunnerMetricsTests(TestCase):
         self.assertIn(f"runner_events_received_total{{{labels}}} 0", body)
         self.assertIn(f"runner_event_trader_pool_size{{{labels}}} 0", body)
         self.assertIn(f"runner_scheduler_lag_max_seconds{{{labels}}} 0.0", body)
+        self.assertIn(f"runner_market_session_open{{{labels}}} 0", body)
+        self.assertIn(
+            f'runner_market_session_transitions_total{{{labels},transition="open"}} 0',
+            body,
+        )
+        self.assertIn(
+            f'runner_market_session_transitions_total{{{labels},transition="close"}} 0',
+            body,
+        )

@@ -85,6 +85,7 @@ def main() -> int:
                 runner.close()
             return 0
 
+        runner.set_market_session_open(True)
         runner.tick_once()
         try:
             logging.info("runner status: %s", asdict(runner.cancel_all_open_orders()))
@@ -160,6 +161,9 @@ def _start_metrics(config: RunnerConfig, runner: ParticipantRunner) -> MetricsSe
             reactions_submitted_total=status.reactions_submitted_total,
             reactions_dropped_total=status.reactions_dropped_total,
             scheduler_lag_max_ms=status.scheduler_lag_max_ms,
+            market_session_open=status.market_session_open,
+            market_session_open_transitions_total=status.market_session_open_transitions_total,
+            market_session_close_transitions_total=status.market_session_close_transitions_total,
         )
 
     server = MetricsServer(config.metrics_bind, config.metrics_port, render)
