@@ -96,4 +96,4 @@ PYTHONPATH=../backend python -m unittest discover
 
 각 전략 runner는 서로 다른 전략의 프로필만 선택한다. 같은 전략을 샤드마다 복제할 때는 `RUNNER_SHARD_INDEX`로 종목을 나눠, 한 프로필이 두 컨테이너에 들어가지 않게 한다.
 
-runner가 정상 종료되면 자신이 추적 중인 미체결 주문을 취소한다. 체결된 뒤 TTL 취소 대상이 된 주문은 backend가 `ALREADY_CLOSED`로 idempotent하게 응답하며, runner 상태 요약의 `already_closed`로 집계된다. 강제 종료나 네트워크 단절로 종료 처리가 실행되지 않은 주문은 현재 메모리 order book에 남을 수 있으므로, 부하 실험 뒤에는 주문을 재시작하거나 정리해야 한다. 서버 측 만료 처리는 주문 영속화 단계에서 별도로 도입한다.
+runner가 정상 종료되면 자신이 추적 중인 미체결 주문을 취소한다. Prometheus metrics에는 `runner_market_session_open`(0/1)과 `runner_market_session_transitions_total{transition="open|close"}`도 노출되어 각 runner의 현재 장 상태와 세션 전환 횟수를 확인할 수 있다. 체결된 뒤 TTL 취소 대상이 된 주문은 backend가 `ALREADY_CLOSED`로 idempotent하게 응답하며, runner 상태 요약의 `already_closed`로 집계된다. 강제 종료나 네트워크 단절로 종료 처리가 실행되지 않은 주문은 현재 메모리 order book에 남을 수 있으므로, 부하 실험 뒤에는 주문을 재시작하거나 정리해야 한다. 서버 측 만료 처리는 주문 영속화 단계에서 별도로 도입한다.
