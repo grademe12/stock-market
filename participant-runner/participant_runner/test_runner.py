@@ -1,7 +1,9 @@
+from datetime import datetime, timedelta
 from threading import Event, Lock
 from time import sleep
 from unittest import TestCase
 
+from exchange.market_session import MarketSession
 from exchange.orderbook import BookLevel, BookSnapshot, OrderSide
 from exchange.participants import LiquidityProvider, OrderIntent, TraderSettings
 
@@ -83,6 +85,36 @@ class ConcurrentBackendClient(FakeBackendClient):
         finally:
             with self._lock:
                 self.in_flight -= 1
+
+
+class FakeWallClock:
+    def __init__(self, now: datetime) -> None:
+        self._now = now
+
+    def now(self) -> datetime:
+        return self._now
+
+    def advance(self, seconds: float) -> None:
+        self._now += timedelta(seconds=seconds)
+
+
+class AdvancingStopEvent:
+    def __init__(self, clock: FakeWallClock, *, stop_after_waits: int) -> None:
+        self.clock = clock
+        self.stop_after_waits = stop_after_waits
+        self.wait_timeouts: list[float] = []
+        self._stopped = False
+
+    def is_set(self) -> bool:
+        return self._stopped
+
+    def wait(self, timeout: float) -> bool:
+        self.wait_timeouts.append(timeout)
+        self.clock.advance(timeout)
+        if len(self.wait_timeouts) >= self.stop_after_waits:
+            self._stopped = True
+            return True
+        return False
 
 
 class StopAfterFirstWait:
@@ -329,11 +361,86 @@ class ParticipantRunnerTests(TestCase):
                 tick_interval_ms=1_000,
                 status_log_interval_ticks=1,
                 stop_event=StopAfterFirstWait(),
+                market_session=MarketSession("always_open"),
             )
 
-        self.assertIn("event=runner_status", logs.output[0])
+        self.assertTrue(
+            any("event=runner_status" in line for line in logs.output)
+        )
         self.assertEqual(status.orders_canceled_total, 1)
         self.assertEqual(status.open_runner_orders, 0)
+
+    def test_scheduled_runner_waits_until_open_before_first_tick(self) -> None:
+        client = FakeBackendClient()
+        runner = ParticipantRunner(client, (StaticParticipant((buy_intent(),)),))
+        wall_clock = FakeWallClock(
+            datetime.fromisoformat("2026-09-22T08:59:59+09:00")
+        )
+        stop_event = AdvancingStopEvent(wall_clock, stop_after_waits=2)
+
+        status = run_until_stopped(
+            runner,
+            tick_interval_ms=1_000,
+            status_log_interval_ticks=60,
+            stop_event=stop_event,
+            market_session=MarketSession("scheduled"),
+            wall_clock=wall_clock,
+        )
+
+        self.assertEqual(status.ticks_total, 1)
+        self.assertEqual(len(client.submissions), 1)
+        self.assertEqual(stop_event.wait_timeouts[0], 1.0)
+
+    def test_market_close_cleans_orders_once_and_stops_new_ticks(self) -> None:
+        client = FakeBackendClient()
+        runner = ParticipantRunner(
+            client,
+            (StaticParticipant((buy_intent(ttl=30),)),),
+        )
+        wall_clock = FakeWallClock(
+            datetime.fromisoformat("2026-09-22T15:29:59+09:00")
+        )
+        stop_event = AdvancingStopEvent(wall_clock, stop_after_waits=2)
+
+        with self.assertLogs(level="INFO") as logs:
+            status = run_until_stopped(
+                runner,
+                tick_interval_ms=1_000,
+                status_log_interval_ticks=60,
+                stop_event=stop_event,
+                market_session=MarketSession("scheduled"),
+                wall_clock=wall_clock,
+            )
+
+        self.assertEqual(status.ticks_total, 1)
+        self.assertEqual(len(client.submissions), 1)
+        self.assertEqual(client.canceled_order_ids, ["order-1"])
+        self.assertEqual(status.open_runner_orders, 0)
+        self.assertEqual(
+            sum("event=runner_market_close" in line for line in logs.output),
+            1,
+        )
+
+    def test_closed_runner_can_stop_without_generating_a_tick(self) -> None:
+        client = FakeBackendClient()
+        runner = ParticipantRunner(client, (StaticParticipant((buy_intent(),)),))
+        wall_clock = FakeWallClock(
+            datetime.fromisoformat("2026-09-22T08:00:00+09:00")
+        )
+        stop_event = AdvancingStopEvent(wall_clock, stop_after_waits=1)
+
+        status = run_until_stopped(
+            runner,
+            tick_interval_ms=1_000,
+            status_log_interval_ticks=60,
+            stop_event=stop_event,
+            market_session=MarketSession("scheduled"),
+            wall_clock=wall_clock,
+        )
+
+        self.assertEqual(status.ticks_total, 0)
+        self.assertEqual(client.submissions, [])
+        self.assertEqual(stop_event.wait_timeouts, [3600.0])
 
     def test_http_concurrency_caps_in_flight_submits(self) -> None:
         client = ConcurrentBackendClient()

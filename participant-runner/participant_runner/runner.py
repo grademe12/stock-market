@@ -1,11 +1,13 @@
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import logging
 from threading import Event, Lock, Semaphore
 from time import monotonic, monotonic_ns, sleep
 from typing import Protocol
 
+from exchange.market_session import MarketSession
 from exchange.orderbook import BookSnapshot
 from exchange.participants.types import ORDER_TTL_SECONDS_DEFAULT, OrderIntent, TradingParticipant
 
@@ -21,6 +23,15 @@ class Clock(Protocol):
 class SystemClock:
     def monotonic_ms(self) -> int:
         return monotonic_ns() // 1_000_000
+
+
+class WallClock(Protocol):
+    def now(self) -> datetime: ...
+
+
+class SystemWallClock:
+    def now(self) -> datetime:
+        return datetime.now(timezone.utc)
 
 
 class BackendClient(Protocol):
@@ -316,9 +327,47 @@ def run_until_stopped(
     tick_interval_ms: int,
     status_log_interval_ticks: int,
     stop_event: Event,
+    *,
+    market_session: MarketSession,
+    wall_clock: WallClock | None = None,
 ) -> RunnerStatus:
+    wall_clock = wall_clock or SystemWallClock()
+    was_open = False
+
     try:
         while not stop_event.is_set():
+            now = wall_clock.now()
+
+            if not market_session.is_open(now):
+                if was_open:
+                    before_close = runner.status()
+                    after_close = runner.cancel_all_open_orders()
+                    cleaned_orders = max(
+                        0,
+                        before_close.open_runner_orders - after_close.open_runner_orders,
+                    )
+                    session_date = market_session.session_date(now)
+                    logging.info(
+                        "event=runner_market_close session_date=%s cleaned_orders=%s",
+                        session_date.isoformat() if session_date is not None else "-",
+                        cleaned_orders,
+                    )
+                    was_open = False
+
+                next_open = market_session.next_open(now)
+                wait_seconds = max(0.001, next_open.timestamp() - now.timestamp())
+                if stop_event.wait(wait_seconds):
+                    break
+                continue
+
+            if not was_open:
+                session_date = market_session.session_date(now)
+                logging.info(
+                    "event=runner_market_open session_date=%s",
+                    session_date.isoformat() if session_date is not None else "-",
+                )
+                was_open = True
+
             status = runner.tick_once()
             if status.ticks_total % status_log_interval_ticks == 0:
                 logging.info(
@@ -341,6 +390,7 @@ def run_until_stopped(
                 )
             if stop_event.wait(tick_interval_ms / 1_000):
                 break
+
         return runner.cancel_all_open_orders()
     finally:
         runner.close()

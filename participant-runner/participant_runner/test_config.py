@@ -23,6 +23,34 @@ class RunnerConfigTests(TestCase):
             ("momentum", "liquidity_provider"),
         )
 
+    def test_market_mode_defaults_to_scheduled(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            config = RunnerConfig.from_environment()
+
+        self.assertEqual(config.simulation_market_mode, "scheduled")
+
+    def test_reads_always_open_market_mode(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"SIMULATION_MARKET_MODE": "always_open"},
+            clear=True,
+        ):
+            config = RunnerConfig.from_environment()
+
+        self.assertEqual(config.simulation_market_mode, "always_open")
+
+    def test_rejects_invalid_market_mode(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"SIMULATION_MARKET_MODE": "invalid"},
+            clear=True,
+        ):
+            with self.assertRaisesRegex(
+                ConfigurationError,
+                "SIMULATION_MARKET_MODE",
+            ):
+                RunnerConfig.from_environment()
+
     def test_metrics_port_defaults_off(self) -> None:
         with patch.dict(os.environ, {}, clear=True):
             config = RunnerConfig.from_environment()

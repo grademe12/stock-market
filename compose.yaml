@@ -131,6 +131,7 @@ services:
     environment:
       BACKEND_BASE_URL: http://gateway:8000
       SCENARIO_PATH: ${SCENARIO_PATH:-}
+      SIMULATION_MARKET_MODE: ${SIMULATION_MARKET_MODE:-scheduled}
     depends_on:
       gateway:
         condition: service_started

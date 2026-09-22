@@ -24,6 +24,7 @@ midpoint는 양쪽 호가가 있으면 두 최우선 호가의 평균, 한쪽만
 | Variable | Default | Meaning |
 |---|---:|---|
 | `BACKEND_BASE_URL` | `http://127.0.0.1:8000` | 공개 진입점. 종목 샤드는 gateway가 고른다 |
+| `SIMULATION_MARKET_MODE` | `scheduled` | `scheduled`: KST 평일 09:00~15:30에만 tick. `always_open`: 실험용 24시간 동작 |
 | `TICK_INTERVAL_MS` | `1000` | 결정 tick 간격. HTTP 완료를 기다리지 않는다 |
 | `REQUEST_TIMEOUT_MS` | `5000` | HTTP 요청 timeout |
 | `RUNNER_STATUS_LOG_INTERVAL_TICKS` | `60` | 상태 요약 로그 출력 주기 |
@@ -49,7 +50,7 @@ PYTHONPATH=../backend python -m participant_runner
 PYTHONPATH=../backend python -m participant_runner --scenario scenarios/breaking_news.json
 ```
 
-`--scenario` 또는 `SCENARIO_PATH`가 있으면 fixture의 이벤트를 `event_reactive` 트레이더에만 적용한다. 기존 baseline 전략은 이벤트와 관계없이 계속 주문한다. 시작 시 프로필을 한 번 읽는다. 실행 중 프로필 변경은 다음 runner 재시작부터 적용된다. 종료 신호(`Ctrl+C`, `SIGTERM`)를 받으면 추적 중인 미체결 runner 주문을 취소한다.
+`--scenario` 또는 `SCENARIO_PATH`가 있으면 fixture의 이벤트를 `event_reactive` 트레이더에만 적용한다. 기존 baseline 전략은 이벤트와 관계없이 계속 주문한다. 시작 시 프로필을 한 번 읽는다. 실행 중 프로필 변경은 다음 runner 재시작부터 적용된다. 기본 `scheduled` 모드에서는 KST 평일 09:00에 tick을 시작하고 15:30부터 신규 tick을 중지한다. 장 마감 전환 시 in-flight HTTP가 끝날 때까지 기다린 뒤 runner가 추적하는 미체결 주문을 한 번 정리하고, 프로세스와 metrics endpoint는 살아 있는 채 다음 평일 개장을 기다린다. 종료 신호(`Ctrl+C`, `SIGTERM`)를 받으면 남은 미체결 runner 주문을 취소한다. `always_open`은 부하 테스트나 시간과 무관한 개발 실험에서만 명시적으로 사용한다.
 
 ## Container run
 

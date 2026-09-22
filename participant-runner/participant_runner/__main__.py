@@ -5,6 +5,8 @@ from pathlib import Path
 import signal
 from threading import Event
 
+from exchange.market_session import MarketSession
+
 from participant_runner.client import BackendApiClient, BackendApiError
 from participant_runner.config import ConfigurationError, RunnerConfig
 from participant_runner.coordinator import EventCoordinator
@@ -53,10 +55,11 @@ def main() -> int:
     symbols = sorted({participant.symbol for participant in participants})
     logging.info(
         "loaded %s participant(s) http_concurrency=%s backend=%s "
-        "runner_shard=%s symbols=%s",
+        "market_mode=%s runner_shard=%s symbols=%s",
         len(participants),
         config.http_concurrency,
         config.backend_base_url,
+        config.simulation_market_mode,
         config.runner_shard_index if config.runner_shard_index is not None else "all",
         ",".join(symbols) or "-",
     )
@@ -67,7 +70,21 @@ def main() -> int:
         http_concurrency=config.http_concurrency,
     )
     metrics_server = _start_metrics(config, runner)
+    market_session = MarketSession(config.simulation_market_mode)
     if arguments.once:
+        if not market_session.is_open():
+            logging.info(
+                "runner once skipped: market is closed; next_open=%s",
+                market_session.next_open().isoformat(),
+            )
+            try:
+                logging.info("runner status: %s", asdict(runner.status()))
+            finally:
+                if metrics_server is not None:
+                    metrics_server.stop()
+                runner.close()
+            return 0
+
         runner.tick_once()
         try:
             logging.info("runner status: %s", asdict(runner.cancel_all_open_orders()))
@@ -90,6 +107,7 @@ def main() -> int:
                     config.tick_interval_ms,
                     config.status_log_interval_ticks,
                     stop_event,
+                    market_session=market_session,
                 )
             ),
         )
