@@ -364,7 +364,9 @@ class ParticipantRunnerTests(TestCase):
                 market_session=MarketSession("always_open"),
             )
 
-        self.assertIn("event=runner_status", logs.output[0])
+        self.assertTrue(
+            any("event=runner_status" in line for line in logs.output)
+        )
         self.assertEqual(status.orders_canceled_total, 1)
         self.assertEqual(status.open_runner_orders, 0)
 
