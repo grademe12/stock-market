@@ -74,8 +74,8 @@ class Migration(migrations.Migration):
                 "constraints": [
                     models.CheckConstraint(
                         condition=models.Q(
-                            ("confidence__gte", 0.0),
-                            ("confidence__lte", 1.0),
+                            confidence__gte=0.0,
+                            confidence__lte=1.0,
                         ),
                         name="market_event_confidence_range",
                     ),
