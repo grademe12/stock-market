@@ -230,3 +230,79 @@ class EventCoordinatorRunnerTests(TestCase):
             )
             self.assertEqual(trader.remaining_reaction_orders, remaining)
             self.assertEqual(coordinator._trader_event[user_id], "a-panic")
+
+
+    def test_live_market_event_is_planned_locally_and_acknowledged(self) -> None:
+        client = FakeBackendClient()
+        client.pending_events = (
+            PendingMarketEvent(
+                event_id="opendart:live:005930",
+                symbol="005930",
+                event_type="supply_contract",
+                direction="BUY",
+                confidence=0.85,
+                impact="high",
+                source="opendart",
+                headline="대규모 공급계약",
+            ),
+        )
+        event_trader = EventReactiveTrader(event_settings())
+        coordinator = EventCoordinator(
+            (),
+            (event_trader,),
+            tick_interval_ms=100,
+            clock=FakeClock(),
+        )
+        runner = self.start_runner(
+            client,
+            (event_trader,),
+            coordinator=coordinator,
+        )
+
+        for _ in range(50):
+            status = self.finish_tick(runner)
+            if client.submissions:
+                break
+
+        self.assertEqual(client.event_poll_requests[0], ("005930",))
+        self.assertEqual(client.acked_event_ids, ["opendart:live:005930"])
+        self.assertEqual(status.events_received_total, 1)
+        self.assertGreater(status.reactions_planned_total, 0)
+        self.assertGreater(len(client.submissions), 0)
+
+    def test_live_event_ack_failure_retries_ack_without_replanning(self) -> None:
+        client = FakeBackendClient()
+        event = PendingMarketEvent(
+            event_id="opendart:retry:005930",
+            symbol="005930",
+            event_type="supply_contract",
+            direction="MIXED",
+            confidence=0.7,
+            impact="medium",
+            source="opendart",
+            headline="복합 공시",
+        )
+        client.pending_events = (event,)
+        client.ack_error = BackendApiError(503, "temporary ack failure")
+        event_trader = EventReactiveTrader(event_settings())
+        coordinator = EventCoordinator(
+            (),
+            (event_trader,),
+            tick_interval_ms=100,
+            clock=FakeClock(),
+        )
+        runner = self.start_runner(
+            client,
+            (event_trader,),
+            coordinator=coordinator,
+        )
+
+        first = self.finish_tick(runner)
+        client.ack_error = None
+        second = self.finish_tick(runner)
+
+        self.assertEqual(first.events_received_total, 1)
+        self.assertEqual(second.events_received_total, 1)
+        self.assertEqual(second.events_deduplicated_total, 1)
+        self.assertEqual(client.acked_event_ids, ["opendart:retry:005930"])
+        self.assertEqual(second.request_failures_total, 1)
