@@ -12,7 +12,7 @@ from rest_framework.response import Response
 
 from exchange.orderbook import OrderNotFoundError, OrderSide
 from exchange.orderbook.registry import books
-from exchange.models import MarketDaily, TraderProfile
+from exchange.models import MarketDaily, MarketEventInbox, TraderProfile
 from exchange.sharding import advertised_hostname, prometheus_sd_targets
 from exchange.simulation import (
     FALLBACK_SYMBOL,
@@ -29,6 +29,7 @@ from exchange.metrics import (
     TRADES_EXECUTED,
 )
 from exchange.serializers import (
+    MarketEventIngestSerializer,
     OrderRequestSerializer,
     RecentTradeQuerySerializer,
     SymbolQuerySerializer,
@@ -313,3 +314,59 @@ def trader_profile_detail(request, trader_id: UUID):
 
     profile.delete()
     return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+_MARKET_EVENT_PAYLOAD_FIELDS = (
+    "symbol",
+    "event_type",
+    "direction",
+    "confidence",
+    "impact",
+    "occurred_at",
+    "detected_at",
+    "source",
+    "source_item_id",
+    "headline",
+)
+
+
+@api_view(["POST"])
+def ingest_market_event(request):
+    """Persist one normalized analyzer event idempotently for later dispatch."""
+    serializer = MarketEventIngestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    payload = dict(serializer.validated_data)
+    event_id = payload.pop("event_id")
+
+    event, created = MarketEventInbox.objects.get_or_create(
+        event_id=event_id,
+        defaults=payload,
+    )
+    if not created and not _market_event_matches(event, serializer.validated_data):
+        return Response(
+            {"detail": "event_id already exists with a different payload"},
+            status=status.HTTP_409_CONFLICT,
+        )
+
+    return Response(
+        {
+            "event_id": event.event_id,
+            "status": "accepted" if created else "duplicate",
+            "state": event.state,
+        },
+        status=(
+            status.HTTP_201_CREATED
+            if created
+            else status.HTTP_200_OK
+        ),
+    )
+
+
+def _market_event_matches(
+    event: MarketEventInbox,
+    payload: dict[str, object],
+) -> bool:
+    return all(
+        getattr(event, field) == payload[field]
+        for field in _MARKET_EVENT_PAYLOAD_FIELDS
+    )

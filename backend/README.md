@@ -78,6 +78,7 @@ make demo-seed TRADER_STRATEGY=event_reactive TRADER_COUNT=50
 | Endpoint | 설명 |
 |---|---|
 | `POST /api/v1/orders/` | 지정가 주문 제출·체결 결과 조회 |
+| `POST /api/v1/events/` | analyzer의 정규화된 `MarketEvent`를 idempotent하게 수신해 pending inbox에 저장 |
 | `DELETE /api/v1/orders/{order_id}/` | 미체결 잔량 주문 취소. 샤드 라우팅 시 `?symbol=` |
 | `GET /api/v1/books/{symbol}/` | 시뮬 대상 종목의 가격별 호가 잔량 조회 |
 | `GET /api/v1/trades/?symbol={symbol}&limit=50` | 해당 종목의 최신 체결 내역 조회 |
@@ -89,6 +90,8 @@ make demo-seed TRADER_STRATEGY=event_reactive TRADER_COUNT=50
 | `GET` / `PATCH` / `DELETE /api/v1/traders/{trader_id}/` | 개별 트레이더 환경설정 조회 / 수정 / 삭제 |
 
 주문 API의 입력은 `user_id`, `symbol`, `side` (`BUY` 또는 `SELL`), `price`, `qty`다. 가격과 수량은 양의 정수만 허용한다.
+
+이벤트 ingest API는 `market-event-analyzer`가 생성한 `event_id`, `symbol`, `event_type`, `direction`, `confidence`, `impact`, `occurred_at`, `detected_at`, `source`, `source_item_id`, `headline`을 받는다. `occurred_at`은 정확한 시각을 모르는 공급자를 위해 `null`일 수 있다. 신규 이벤트는 HTTP 201과 `status: accepted`, 동일 payload의 재전송은 HTTP 200과 `status: duplicate`를 반환한다. 같은 `event_id`에 다른 payload가 오면 HTTP 409로 거절한다. 수신 이벤트는 장 상태와 무관하게 `pending`으로 보관하며, runner dispatch는 별도 단계에서 처리한다.
 
 기본 `SIMULATION_MARKET_MODE=scheduled`에서는 KST 평일 09:00 이상 15:30 미만에만 신규 주문을 받는다. 장외 `POST /api/v1/orders/`는 HTTP 409와 `{"detail":"market is closed"}`로 거절되며, 조회와 주문 취소 API는 계속 사용할 수 있다. 새 평일 거래일을 처음 인지하면 matcher는 이전 거래일의 in-memory 호가, 최근 체결, order-id map을 비우고 해당 종목의 `orderbook_depth` metric도 0으로 맞춘다. 실제 KRX 공휴일 달력은 아직 반영하지 않는다. 인프라 부하 실험처럼 시간 제한이 불필요한 경우에만 `SIMULATION_MARKET_MODE=always_open`을 명시하며, 이 모드에서는 날짜 기반 rollover도 수행하지 않는다. `make load-backend-up`은 이 실험 모드를 자동으로 사용한다.
 

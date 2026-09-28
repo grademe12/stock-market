@@ -97,3 +97,59 @@ class ReferenceImportRun(models.Model):
 
     class Meta:
         ordering = ("-started_at",)
+
+
+class MarketEventInbox(models.Model):
+    """Persist one normalized analyzer event until participant runners consume it."""
+
+    class Direction(models.TextChoices):
+        BUY = "BUY", "Buy"
+        SELL = "SELL", "Sell"
+        MIXED = "MIXED", "Mixed"
+
+    class Impact(models.TextChoices):
+        LOW = "low", "Low"
+        MEDIUM = "medium", "Medium"
+        HIGH = "high", "High"
+
+    class State(models.TextChoices):
+        PENDING = "pending", "Pending"
+        DISPATCHED = "dispatched", "Dispatched"
+        STALE = "stale", "Stale"
+
+    event_id = models.CharField(primary_key=True, max_length=255)
+    symbol = models.CharField(max_length=6)
+    event_type = models.CharField(max_length=64)
+    direction = models.CharField(max_length=5, choices=Direction.choices)
+    confidence = models.FloatField()
+    impact = models.CharField(max_length=6, choices=Impact.choices)
+    occurred_at = models.DateTimeField(null=True, blank=True)
+    detected_at = models.DateTimeField()
+    source = models.CharField(max_length=64)
+    source_item_id = models.CharField(max_length=255, blank=True)
+    headline = models.TextField(blank=True)
+    state = models.CharField(
+        max_length=16,
+        choices=State.choices,
+        default=State.PENDING,
+    )
+    received_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("received_at", "event_id")
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(confidence__gte=0.0) & models.Q(confidence__lte=1.0),
+                name="market_event_confidence_range",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=("state", "received_at"),
+                name="event_inbox_state_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.event_id} {self.symbol} {self.state}"
