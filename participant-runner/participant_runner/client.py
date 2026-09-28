@@ -2,6 +2,7 @@ import json
 from dataclasses import dataclass
 from typing import Any
 from urllib.error import HTTPError, URLError
+from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
 from exchange.orderbook import BookLevel, BookSnapshot
@@ -23,6 +24,18 @@ class SubmittedOrder:
 @dataclass(frozen=True, slots=True)
 class CancellationResult:
     status: str
+
+
+@dataclass(frozen=True, slots=True)
+class PendingMarketEvent:
+    event_id: str
+    symbol: str
+    event_type: str
+    direction: str
+    confidence: float
+    impact: str
+    source: str
+    headline: str
 
 
 class BackendApiClient:
@@ -90,6 +103,53 @@ class BackendApiClient:
                 continue
             shards[ticker] = int(raw_shard)
         return shards
+
+    def fetch_pending_market_events(
+        self,
+        symbols: tuple[str, ...],
+    ) -> tuple[PendingMarketEvent, ...]:
+        if not symbols:
+            return ()
+        query = urlencode({"symbols": ",".join(symbols)})
+        payload = self._request("GET", f"/api/v1/events/pending/?{query}")
+        if not isinstance(payload, dict) or not isinstance(payload.get("results"), list):
+            raise BackendApiError(None, "pending event response must include results")
+
+        events: list[PendingMarketEvent] = []
+        for item in payload["results"]:
+            try:
+                event = PendingMarketEvent(
+                    event_id=str(item["event_id"]),
+                    symbol=str(item["symbol"]),
+                    event_type=str(item["event_type"]),
+                    direction=str(item["direction"]),
+                    confidence=float(item["confidence"]),
+                    impact=str(item["impact"]),
+                    source=str(item["source"]),
+                    headline=str(item.get("headline", "")),
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                raise BackendApiError(None, "pending event response has an invalid shape") from exc
+            if (
+                not event.event_id
+                or len(event.symbol) != 6
+                or not event.symbol.isdigit()
+                or event.direction not in {"BUY", "SELL", "MIXED"}
+                or event.impact not in {"low", "medium", "high"}
+                or not 0.0 <= event.confidence <= 1.0
+            ):
+                raise BackendApiError(None, "pending event response has invalid values")
+            events.append(event)
+        return tuple(events)
+
+    def acknowledge_market_event(self, event_id: str) -> None:
+        payload = self._request(
+            "POST",
+            f"/api/v1/events/{quote(event_id, safe='')}/ack/",
+            {},
+        )
+        if not isinstance(payload, dict) or payload.get("state") != "dispatched":
+            raise BackendApiError(None, "event acknowledgement response is invalid")
 
     def cancel_order(self, order_id: str, symbol: str = "") -> CancellationResult:
         path = f"/api/v1/orders/{order_id}/"
@@ -161,6 +221,15 @@ class ShardedBackendClient:
 
     def submit_order(self, intent: OrderIntent) -> SubmittedOrder:
         return self._client_for(intent.symbol).submit_order(intent)
+
+    def fetch_pending_market_events(
+        self,
+        symbols: tuple[str, ...],
+    ) -> tuple[PendingMarketEvent, ...]:
+        return self._clients[0].fetch_pending_market_events(symbols)
+
+    def acknowledge_market_event(self, event_id: str) -> None:
+        self._clients[0].acknowledge_market_event(event_id)
 
     def cancel_order(self, order_id: str, symbol: str = "") -> CancellationResult:
         if not symbol:
