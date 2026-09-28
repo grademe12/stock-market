@@ -2,7 +2,7 @@ from unittest import TestCase
 
 from exchange.participants import EventPreset, EventReactiveTrader, NewsShockEvent, TraderSettings
 
-from participant_runner.client import BackendApiError
+from participant_runner.client import BackendApiError, PendingMarketEvent
 from participant_runner.coordinator import EventCoordinator, FakeClock
 from participant_runner.runner import ParticipantRunner
 from participant_runner.test_runner import FakeBackendClient, StaticParticipant, buy_intent
