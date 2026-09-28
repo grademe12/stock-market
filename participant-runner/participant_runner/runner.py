@@ -11,7 +11,12 @@ from exchange.market_session import MarketSession
 from exchange.orderbook import BookSnapshot
 from exchange.participants.types import ORDER_TTL_SECONDS_DEFAULT, OrderIntent, TradingParticipant
 
-from participant_runner.client import BackendApiError, CancellationResult, SubmittedOrder
+from participant_runner.client import (
+    BackendApiError,
+    CancellationResult,
+    PendingMarketEvent,
+    SubmittedOrder,
+)
 from participant_runner.config import HTTP_CONCURRENCY_DEFAULT
 from participant_runner.coordinator import CoordinatorStatus, EventCoordinator
 
@@ -38,6 +43,13 @@ class BackendClient(Protocol):
     def fetch_book(self, symbol: str) -> BookSnapshot: ...
 
     def submit_order(self, intent: OrderIntent) -> SubmittedOrder: ...
+
+    def fetch_pending_market_events(
+        self,
+        symbols: tuple[str, ...],
+    ) -> tuple[PendingMarketEvent, ...]: ...
+
+    def acknowledge_market_event(self, event_id: str) -> None: ...
 
     def cancel_order(self, order_id: str, symbol: str = "") -> CancellationResult: ...
 
@@ -116,6 +128,7 @@ class ParticipantRunner:
 
     def tick_once(self) -> RunnerStatus:
         self._tick += 1
+        self._poll_market_events()
         self._notify_coordinator_before_tick()
         self._expire_orders()
 
@@ -134,6 +147,50 @@ class ParticipantRunner:
 
     def close(self) -> None:
         self._pool.shutdown(wait=True)
+
+    def _poll_market_events(self) -> None:
+        if self._coordinator is None:
+            return
+        symbols = self._coordinator.event_symbols()
+        if not symbols:
+            return
+
+        try:
+            events = self._client.fetch_pending_market_events(symbols)
+        except BackendApiError as exc:
+            with self._lock:
+                self._request_failures += 1
+            logging.warning("market event polling failed: %s", exc)
+            return
+
+        for event in events:
+            try:
+                self._coordinator.apply_market_event(
+                    event_id=event.event_id,
+                    symbol=event.symbol,
+                    direction=event.direction,
+                    impact=event.impact,
+                    label=event.headline,
+                    source=event.source,
+                    tick=self._tick,
+                )
+            except Exception:
+                logging.exception(
+                    "market event application failed event_id=%s",
+                    event.event_id,
+                )
+                continue
+
+            try:
+                self._client.acknowledge_market_event(event.event_id)
+            except BackendApiError as exc:
+                with self._lock:
+                    self._request_failures += 1
+                logging.warning(
+                    "market event acknowledgement failed event_id=%s: %s",
+                    event.event_id,
+                    exc,
+                )
 
     def _notify_coordinator_before_tick(self) -> None:
         if self._coordinator is None:

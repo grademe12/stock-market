@@ -53,3 +53,54 @@ class BackendApiClientTests(TestCase):
         payload = client.fetch_ready()
 
         self.assertEqual(payload["shard_count"], 4)
+
+
+    @patch("participant_runner.client.urlopen")
+    def test_fetch_pending_market_events_parses_dispatch_contract(self, mocked_urlopen) -> None:
+        mocked_urlopen.return_value = FakeResponse(
+            {
+                "market_open": True,
+                "results": [
+                    {
+                        "event_id": "opendart:20260928000123:005930",
+                        "symbol": "005930",
+                        "event_type": "supply_contract",
+                        "direction": "BUY",
+                        "confidence": 0.85,
+                        "impact": "high",
+                        "source": "opendart",
+                        "headline": "삼성전자 공급계약",
+                    }
+                ],
+            }
+        )
+        client = BackendApiClient("http://backend:8000", timeout_ms=5_000)
+
+        events = client.fetch_pending_market_events(("005930", "000660"))
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].event_id, "opendart:20260928000123:005930")
+        self.assertEqual(events[0].direction, "BUY")
+        self.assertEqual(events[0].impact, "high")
+        request = mocked_urlopen.call_args.args[0]
+        self.assertIn("/api/v1/events/pending/?", request.full_url)
+        self.assertIn("005930", request.full_url)
+        self.assertIn("000660", request.full_url)
+
+    @patch("participant_runner.client.urlopen")
+    def test_acknowledge_market_event_accepts_dispatched_state(self, mocked_urlopen) -> None:
+        mocked_urlopen.return_value = FakeResponse(
+            {
+                "event_id": "opendart:20260928000123:005930",
+                "status": "acknowledged",
+                "state": "dispatched",
+            }
+        )
+        client = BackendApiClient("http://backend:8000", timeout_ms=5_000)
+
+        client.acknowledge_market_event("opendart:20260928000123:005930")
+
+        request = mocked_urlopen.call_args.args[0]
+        self.assertEqual(request.method, "POST")
+        self.assertIn("/api/v1/events/", request.full_url)
+        self.assertTrue(request.full_url.endswith("/ack/"))

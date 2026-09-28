@@ -122,13 +122,13 @@ def _build_coordinator(
     scenario_argument: Path | None,
     config: RunnerConfig,
     participants,
-) -> EventCoordinator | None:
+) -> EventCoordinator:
     scenario_path = scenario_argument or config.scenario_path
-    if scenario_path is None:
-        return None
+    events = ()
+    if scenario_path is not None:
+        events = load_scenario(scenario_path)
+        logging.info("loaded scenario %s events=%s", scenario_path, len(events))
 
-    events = load_scenario(scenario_path)
-    logging.info("loaded scenario %s events=%s", scenario_path, len(events))
     return EventCoordinator(
         events,
         participants,

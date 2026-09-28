@@ -1,3 +1,4 @@
+from datetime import timedelta
 import logging
 from uuid import UUID
 
@@ -5,6 +6,7 @@ from django.conf import settings
 from django.db import DatabaseError, connection
 from django.db.models import Max, Q
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
@@ -370,3 +372,85 @@ def _market_event_matches(
         getattr(event, field) == payload[field]
         for field in _MARKET_EVENT_PAYLOAD_FIELDS
     )
+
+
+
+@api_view(["GET"])
+def pending_market_events(request):
+    """Return pending events for runner-owned symbols only while the market is open."""
+    symbols = _parse_event_symbols(request.query_params.get("symbols", ""))
+    if not symbols:
+        raise ValidationError({"symbols": "at least one six-digit symbol is required"})
+
+    session = MarketSession(settings.SIMULATION_MARKET_MODE)
+    if not session.is_open():
+        return Response({"market_open": False, "results": []})
+
+    _mark_stale_market_events(timezone.now())
+    events = MarketEventInbox.objects.filter(
+        state=MarketEventInbox.State.PENDING,
+        symbol__in=symbols,
+    ).order_by("detected_at", "event_id")[:100]
+
+    return Response(
+        {
+            "market_open": True,
+            "results": [_market_event_dispatch_payload(event) for event in events],
+        }
+    )
+
+
+@api_view(["POST"])
+def acknowledge_market_event(request, event_id: str):
+    """Mark one event as handed to a runner; repeated acknowledgements are harmless."""
+    event = get_object_or_404(MarketEventInbox, event_id=event_id)
+    if event.state == MarketEventInbox.State.STALE:
+        return Response(
+            {"detail": "event is stale", "event_id": event.event_id, "state": event.state},
+            status=status.HTTP_409_CONFLICT,
+        )
+    if event.state == MarketEventInbox.State.DISPATCHED:
+        return Response(
+            {"event_id": event.event_id, "status": "duplicate", "state": event.state}
+        )
+
+    event.state = MarketEventInbox.State.DISPATCHED
+    event.save(update_fields=("state", "updated_at"))
+    return Response(
+        {"event_id": event.event_id, "status": "acknowledged", "state": event.state}
+    )
+
+
+def _parse_event_symbols(raw: str) -> tuple[str, ...]:
+    symbols = tuple(dict.fromkeys(value.strip() for value in raw.split(",") if value.strip()))
+    if len(symbols) > 100:
+        raise ValidationError({"symbols": "at most 100 symbols are allowed"})
+    if any(len(symbol) != 6 or not symbol.isdigit() for symbol in symbols):
+        raise ValidationError({"symbols": "symbols must be six-digit stock codes"})
+    return symbols
+
+
+def _mark_stale_market_events(now) -> None:
+    cutoff = now - timedelta(seconds=settings.SIMULATION_EVENT_MAX_AGE_SECONDS)
+    for event in MarketEventInbox.objects.filter(state=MarketEventInbox.State.PENDING):
+        reference_time = event.occurred_at or event.detected_at
+        if reference_time >= cutoff:
+            continue
+        event.state = MarketEventInbox.State.STALE
+        event.save(update_fields=("state", "updated_at"))
+
+
+def _market_event_dispatch_payload(event: MarketEventInbox) -> dict[str, object]:
+    return {
+        "event_id": event.event_id,
+        "symbol": event.symbol,
+        "event_type": event.event_type,
+        "direction": event.direction,
+        "confidence": event.confidence,
+        "impact": event.impact,
+        "occurred_at": event.occurred_at.isoformat() if event.occurred_at else None,
+        "detected_at": event.detected_at.isoformat(),
+        "source": event.source,
+        "source_item_id": event.source_item_id,
+        "headline": event.headline,
+    }

@@ -62,7 +62,7 @@ make demo-seed TRADER_STRATEGY=liquidity_provider TRADER_COUNT=5
 make demo-seed TRADER_STRATEGY=event_reactive TRADER_COUNT=50
 ```
 
-`event_reactive`는 뉴스 반응용 휴면 풀이다. runner에 `--scenario` 또는 `SCENARIO_PATH`로 fixture를 줄 때만 반응 주문을 낸다.
+`event_reactive`는 뉴스 반응용 휴면 풀이다. fixture 시나리오뿐 아니라 analyzer에서 들어온 live event도 runner가 pending inbox에서 가져와 반응 주문을 만든다. 모델 추론은 analyzer에서 한 번만 수행하고 runner는 direction/impact를 로컬 deterministic reaction preset으로 변환한다.
 
 정리와 상세 실행 순서는 [데모 runbook](../docs/DEMO_RUNBOOK.md)을 참고한다.
 
@@ -79,6 +79,8 @@ make demo-seed TRADER_STRATEGY=event_reactive TRADER_COUNT=50
 |---|---|
 | `POST /api/v1/orders/` | 지정가 주문 제출·체결 결과 조회 |
 | `POST /api/v1/events/` | analyzer의 정규화된 `MarketEvent`를 idempotent하게 수신해 pending inbox에 저장 |
+| `GET /api/v1/events/pending/?symbols=005930,000660` | 장중에 runner가 담당 종목의 pending 이벤트 조회 |
+| `POST /api/v1/events/{event_id}/ack/` | runner가 반응 계획을 수락한 이벤트를 dispatched로 ACK |
 | `DELETE /api/v1/orders/{order_id}/` | 미체결 잔량 주문 취소. 샤드 라우팅 시 `?symbol=` |
 | `GET /api/v1/books/{symbol}/` | 시뮬 대상 종목의 가격별 호가 잔량 조회 |
 | `GET /api/v1/trades/?symbol={symbol}&limit=50` | 해당 종목의 최신 체결 내역 조회 |
@@ -91,7 +93,7 @@ make demo-seed TRADER_STRATEGY=event_reactive TRADER_COUNT=50
 
 주문 API의 입력은 `user_id`, `symbol`, `side` (`BUY` 또는 `SELL`), `price`, `qty`다. 가격과 수량은 양의 정수만 허용한다.
 
-이벤트 ingest API는 `market-event-analyzer`가 생성한 `event_id`, `symbol`, `event_type`, `direction`, `confidence`, `impact`, `occurred_at`, `detected_at`, `source`, `source_item_id`, `headline`을 받는다. `occurred_at`은 정확한 시각을 모르는 공급자를 위해 `null`일 수 있다. 신규 이벤트는 HTTP 201과 `status: accepted`, 동일 payload의 재전송은 HTTP 200과 `status: duplicate`를 반환한다. 같은 `event_id`에 다른 payload가 오면 HTTP 409로 거절한다. 수신 이벤트는 장 상태와 무관하게 `pending`으로 보관하며, runner dispatch는 별도 단계에서 처리한다.
+이벤트 ingest API는 `market-event-analyzer`가 생성한 `event_id`, `symbol`, `event_type`, `direction`, `confidence`, `impact`, `occurred_at`, `detected_at`, `source`, `source_item_id`, `headline`을 받는다. `occurred_at`은 정확한 시각을 모르는 공급자를 위해 `null`일 수 있다. 신규 이벤트는 HTTP 201과 `status: accepted`, 동일 payload의 재전송은 HTTP 200과 `status: duplicate`를 반환한다. 같은 `event_id`에 다른 payload가 오면 HTTP 409로 거절한다. 수신 이벤트는 장 상태와 무관하게 `pending`으로 보관한다. runner는 장중에만 자기 `event_reactive` 종목의 pending 이벤트를 조회하고, 로컬 반응 계획을 만든 뒤 ACK한다. ACK된 이벤트는 `dispatched`가 되며 같은 ACK는 idempotent하다. `SIMULATION_EVENT_MAX_AGE_SECONDS`(기본 259200초 = 72시간)를 넘긴 pending 이벤트는 `stale`로 바뀌며 더 이상 runner에 전달되지 않는다. stale 기준은 정확한 `occurred_at`이 있으면 그 시각을, 없으면 `detected_at`을 사용한다.
 
 기본 `SIMULATION_MARKET_MODE=scheduled`에서는 KST 평일 09:00 이상 15:30 미만에만 신규 주문을 받는다. 장외 `POST /api/v1/orders/`는 HTTP 409와 `{"detail":"market is closed"}`로 거절되며, 조회와 주문 취소 API는 계속 사용할 수 있다. 새 평일 거래일을 처음 인지하면 matcher는 이전 거래일의 in-memory 호가, 최근 체결, order-id map을 비우고 해당 종목의 `orderbook_depth` metric도 0으로 맞춘다. 실제 KRX 공휴일 달력은 아직 반영하지 않는다. 인프라 부하 실험처럼 시간 제한이 불필요한 경우에만 `SIMULATION_MARKET_MODE=always_open`을 명시하며, 이 모드에서는 날짜 기반 rollover도 수행하지 않는다. `make load-backend-up`은 이 실험 모드를 자동으로 사용한다.
 
@@ -109,7 +111,7 @@ make demo-seed TRADER_STRATEGY=event_reactive TRADER_COUNT=50
 
 Compose 환경은 KRX 참조 데이터와 트레이더 설정을 PostgreSQL에 저장한다. 주문·체결과 호가창은 아직 메모리에만 있으며 backend 재시작 시 초기화된다. 로컬 `make backend-test`는 빠른 단위 테스트를 위해 SQLite를 사용한다.
 
-`DATABASE_ENGINE`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`, `KRX_API_KEY`, `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`, `TRADE_EXECUTION_LOG_ENABLED`, `SIMULATION_SYMBOL_LIMIT`, `SIMULATION_SHARD_COUNT`, `SIMULATION_SHARD_INDEX`, `PORT`는 환경 변수로 설정할 수 있습니다. 기본값은 로컬 개발 전용이며 배포 환경에서는 사용하지 않습니다.
+`DATABASE_ENGINE`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`, `KRX_API_KEY`, `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`, `TRADE_EXECUTION_LOG_ENABLED`, `SIMULATION_SYMBOL_LIMIT`, `SIMULATION_SHARD_COUNT`, `SIMULATION_SHARD_INDEX`, `SIMULATION_EVENT_MAX_AGE_SECONDS`, `PORT`는 환경 변수로 설정할 수 있습니다. 기본값은 로컬 개발 전용이며 배포 환경에서는 사용하지 않습니다.
 
 ## KRX reference import
 

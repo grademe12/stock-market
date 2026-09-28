@@ -4,6 +4,8 @@ import logging
 from typing import Protocol
 
 from exchange.participants import (
+    DirectionHint,
+    EventPreset,
     EventReactiveTrader,
     NewsShockEvent,
     ReactionPlanner,
@@ -111,15 +113,75 @@ class EventCoordinator:
         self._reactions_submitted = 0
         self._reactions_dropped = 0
         self._scheduler_lag_max_ms = 0
+        self._live_events: dict[str, NewsShockEvent] = {}
+        self._live_event_ids: set[str] = set()
 
     def elapsed_ms(self) -> int:
         return self._clock.monotonic_ms() - self._started_ms
+
+    def event_symbols(self) -> tuple[str, ...]:
+        return tuple(sorted({trader.symbol for trader in self._traders.values()}))
+
+    def apply_market_event(
+        self,
+        *,
+        event_id: str,
+        symbol: str,
+        direction: str,
+        impact: str,
+        label: str,
+        source: str,
+        tick: int,
+    ) -> None:
+        if tick < 1:
+            raise ValueError("tick must be positive")
+        try:
+            direction_hint = DirectionHint(direction)
+        except ValueError as exc:
+            raise ValueError("market event direction is invalid") from exc
+
+        preset_by_impact = {
+            "low": EventPreset.MINOR_NEWS,
+            "medium": EventPreset.BREAKING_NEWS,
+            "high": EventPreset.MARKET_PANIC,
+        }
+        try:
+            preset = preset_by_impact[impact]
+        except KeyError as exc:
+            raise ValueError("market event impact is invalid") from exc
+
+        existing = self._live_events.get(event_id)
+        if existing is not None:
+            if (
+                existing.symbol != symbol
+                or existing.preset is not preset
+                or existing.direction_hint is not direction_hint
+                or existing.label != label
+                or existing.source != source
+            ):
+                raise ValueError("event_id was already used with a different payload")
+            self._apply_event(existing)
+            return
+
+        event = NewsShockEvent(
+            event_id=event_id,
+            symbol=symbol,
+            starts_after_ms=tick * self._tick_interval_ms,
+            preset=preset,
+            direction_hint=direction_hint,
+            label=label,
+            source=source,
+            seed=42,
+        )
+        self._live_events[event_id] = event
+        self._live_event_ids.add(event_id)
+        self._apply_event(event)
 
     def before_tick(self, tick: int) -> None:
         elapsed = self.elapsed_ms()
         for event in self._source.due_events(elapsed):
             self._apply_event(event)
-        self._drop_late_orders(elapsed)
+        self._drop_late_orders(elapsed, tick)
         for event_id in tuple(self._runs):
             self._maybe_complete(event_id)
 
@@ -137,7 +199,12 @@ class EventCoordinator:
         self._reactions_submitted += 1
         run.submitted += 1
         scheduled_ms = tick * self._tick_interval_ms
-        lag = max(0, self.elapsed_ms() - scheduled_ms)
+        current_ms = (
+            scheduled_ms
+            if event_id in self._live_event_ids
+            else self.elapsed_ms()
+        )
+        lag = max(0, current_ms - scheduled_ms)
         self._scheduler_lag_max_ms = max(self._scheduler_lag_max_ms, lag)
         if not run.first_reaction_logged:
             run.first_reaction_logged = True
@@ -220,13 +287,18 @@ class EventCoordinator:
         self._record_drops(previous_event_id, leftover)
         self._maybe_complete(previous_event_id)
 
-    def _drop_late_orders(self, elapsed_ms: int) -> None:
+    def _drop_late_orders(self, elapsed_ms: int, tick: int) -> None:
         for user_id, trader in self._traders.items():
             event_id = self._trader_event.get(user_id)
             if event_id is None:
                 continue
+            scheduler_ms = (
+                tick * self._tick_interval_ms
+                if event_id in self._live_event_ids
+                else elapsed_ms
+            )
             dropped = trader.drop_late_orders(
-                elapsed_ms,
+                scheduler_ms,
                 self._tick_interval_ms,
                 self._event_max_lag[event_id],
             )
