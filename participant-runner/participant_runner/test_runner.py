@@ -10,6 +10,7 @@ from exchange.participants import LiquidityProvider, OrderIntent, TraderSettings
 from participant_runner.client import (
     BackendApiError,
     CancellationResult,
+    PendingMarketEvent,
     ShardedBackendClient,
     SubmittedOrder,
 )
@@ -40,6 +41,10 @@ class FakeBackendClient:
         self.closed_order_ids: set[str] = set()
         self.book_requests: list[str] = []
         self.book_error: BackendApiError | None = None
+        self.pending_events: tuple[PendingMarketEvent, ...] = ()
+        self.event_poll_requests: list[tuple[str, ...]] = []
+        self.acked_event_ids: list[str] = []
+        self.ack_error: BackendApiError | None = None
         self._lock = Lock()
         self._next_order = 0
 
@@ -52,6 +57,21 @@ class FakeBackendClient:
             symbol=symbol,
             bids=(BookLevel(price=69_900, quantity=10),),
             asks=(BookLevel(price=70_100, quantity=10),),
+        )
+
+    def fetch_pending_market_events(
+        self,
+        symbols: tuple[str, ...],
+    ) -> tuple[PendingMarketEvent, ...]:
+        self.event_poll_requests.append(symbols)
+        return self.pending_events
+
+    def acknowledge_market_event(self, event_id: str) -> None:
+        if self.ack_error is not None:
+            raise self.ack_error
+        self.acked_event_ids.append(event_id)
+        self.pending_events = tuple(
+            event for event in self.pending_events if event.event_id != event_id
         )
 
     def submit_order(self, intent: OrderIntent) -> SubmittedOrder:
