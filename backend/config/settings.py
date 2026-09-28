@@ -60,6 +60,12 @@ SIMULATION_LISTEN_PORT = _env_int(
     minimum=1,
     maximum=65535,
 )
+SIMULATION_EVENT_MAX_AGE_SECONDS = _env_int(
+    "SIMULATION_EVENT_MAX_AGE_SECONDS",
+    72 * 60 * 60,
+    minimum=60,
+    maximum=7 * 24 * 60 * 60,
+)
 if SIMULATION_SHARD_INDEX >= SIMULATION_SHARD_COUNT:
     raise RuntimeError("SIMULATION_SHARD_INDEX must be less than SIMULATION_SHARD_COUNT")
 ALLOWED_HOSTS = [
