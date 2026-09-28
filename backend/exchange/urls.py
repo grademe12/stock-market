@@ -7,6 +7,7 @@ urlpatterns = [
     path("ready/", views.readiness, name="readiness"),
     path("prometheus-sd/", views.prometheus_service_discovery, name="prometheus-sd"),
     path("orders/", views.create_order, name="order-create"),
+    path("events/", views.ingest_market_event, name="market-event-ingest"),
     path("orders/<uuid:order_id>/", views.cancel_order, name="order-cancel"),
     path("books/<str:symbol>/", views.book_detail, name="book-detail"),
     path("trades/", views.recent_trade_list, name="recent-trade-list"),
