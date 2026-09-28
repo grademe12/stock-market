@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from exchange.models import TraderProfile
+from exchange.models import MarketEventInbox, TraderProfile
 from exchange.orderbook import BookSnapshot, MatchResult, Order, OrderSide, Trade
 from exchange.simulation import FALLBACK_SYMBOL, is_simulated_symbol
 
@@ -121,3 +121,39 @@ def snapshot_payload(snapshot: BookSnapshot) -> dict[str, object]:
         "bids": [{"price": level.price, "qty": level.quantity} for level in snapshot.bids],
         "asks": [{"price": level.price, "qty": level.quantity} for level in snapshot.asks],
     }
+
+
+class MarketEventIngestSerializer(serializers.Serializer):
+    event_id = serializers.CharField(max_length=255, trim_whitespace=True)
+    symbol = serializers.RegexField(regex=r"^\d{6}$")
+    event_type = serializers.CharField(max_length=64, trim_whitespace=True)
+    direction = serializers.ChoiceField(choices=MarketEventInbox.Direction.values)
+    confidence = serializers.FloatField(min_value=0.0, max_value=1.0)
+    impact = serializers.ChoiceField(choices=MarketEventInbox.Impact.values)
+    occurred_at = serializers.DateTimeField(
+        required=False,
+        allow_null=True,
+        default=None,
+    )
+    detected_at = serializers.DateTimeField()
+    source = serializers.CharField(max_length=64, trim_whitespace=True)
+    source_item_id = serializers.CharField(
+        max_length=255,
+        required=False,
+        allow_blank=True,
+        default="",
+    )
+    headline = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default="",
+    )
+
+    def validate(self, attrs):
+        occurred_at = attrs.get("occurred_at")
+        detected_at = attrs["detected_at"]
+        if occurred_at is not None and detected_at < occurred_at:
+            raise serializers.ValidationError(
+                {"detected_at": "detected_at must not be before occurred_at"}
+            )
+        return attrs
