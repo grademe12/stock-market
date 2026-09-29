@@ -19,6 +19,9 @@ READY_SHARD_PATH = re.compile(r"^/api/v1/ready/(\d+)/?$")
 SERVICE_DISCOVERY_PATH = re.compile(r"^/api/v1/prometheus-sd/?$")
 DEFAULT_SHARD_PATHS = (
     re.compile(r"^/api/v1/health/?$"),
+    re.compile(r"^/api/v1/events/?$"),
+    re.compile(r"^/api/v1/events/pending/?$"),
+    re.compile(r"^/api/v1/events/[^/]+/ack/?$"),
     re.compile(r"^/api/v1/ready/?$"),
     re.compile(r"^/api/v1/symbols/?$"),
     re.compile(r"^/api/v1/traders(?:/[0-9a-fA-F-]+)?/?$"),
