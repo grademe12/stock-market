@@ -33,6 +33,34 @@ class GatewayRoutingTests(TestCase):
     def test_health_stays_on_shard_zero(self) -> None:
         self.assertEqual(self.route("GET", "/api/v1/health/").shard_index, 0)
 
+    def test_market_event_control_routes_stay_on_shard_zero(self) -> None:
+        self.assertEqual(
+            self.route("POST", "/api/v1/events/").shard_index,
+            0,
+        )
+        self.assertEqual(
+            self.route(
+                "GET",
+                "/api/v1/events/pending/",
+                query="symbols=005930,000660",
+            ).shard_index,
+            0,
+        )
+        self.assertEqual(
+            self.route(
+                "POST",
+                "/api/v1/events/manual-e2e-001/ack/",
+            ).shard_index,
+            0,
+        )
+        self.assertEqual(
+            self.route(
+                "POST",
+                "/api/v1/events/opendart%3A20260928000123%3A005930/ack/",
+            ).shard_index,
+            0,
+        )
+
     def test_book_follows_universe_position(self) -> None:
         self.assertEqual(self.route("GET", "api/v1/books/000660/").shard_index, 0)
         self.assertEqual(self.route("GET", "/api/v1/books/005930").shard_index, 1)
