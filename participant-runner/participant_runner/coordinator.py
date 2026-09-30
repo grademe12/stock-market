@@ -230,10 +230,13 @@ class EventCoordinator:
 
     def _apply_event(self, event: NewsShockEvent) -> None:
         logging.info(
-            "event=news_received event_id=%s symbol=%s preset=%s seed=%s starts_after_ms=%s",
+            "event=news_received event_id=%s symbol=%s direction=%s preset=%s "
+            "label=%s seed=%s starts_after_ms=%s",
             event.event_id,
             event.symbol,
+            event.direction_hint.value,
             event.preset,
+            event.label,
             event.seed,
             event.starts_after_ms,
         )
