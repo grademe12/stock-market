@@ -18,8 +18,9 @@
 
 ## 실행
 
+2026-07-26 측정은 로컬 Compose 매처를 띄운 뒤 k6를 실행했다. 그 로컬 매처와 게이트웨이를 올리는 `make load-backend-up`은 제거했다. 운영 진입점은 GCE 게이트웨이 `:8000`이다.
+
 ```bash
-make load-backend-up
 make load-steady ORDER_RATE=10 TEST_DURATION=30s
 make load-steady ORDER_RATE=50 TEST_DURATION=30s
 make load-steady ORDER_RATE=100 TEST_DURATION=30s

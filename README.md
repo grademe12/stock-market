@@ -40,12 +40,9 @@ observability/ 대시보드·알림 구성 (Stage 3부터)
 
 backend와 외부 시장참여자 runner는 각각 독립 이미지로 패키징된다. 현재 호가창은 한 프로세스의 메모리에 있으므로 backend 컨테이너는 Gunicorn worker 1개로 실행한다.
 
-```bash
-docker compose up --build backend
-# runner까지 실행: docker compose --profile runner up --build
-```
+운영 매처와 게이트웨이는 GCE에 있다. 로컬 Compose로 그 스택을 올리던 명령은 제거했다. 시장참여자는 [participant-runner README](participant-runner/README.md)의 runner Compose로 실행한다.
 
-상세 설정과 실행 순서는 [backend README](backend/README.md), [participant-runner README](participant-runner/README.md)를 참고한다.
+상세 설정은 [backend README](backend/README.md)를 참고한다.
 
 ## 진행 방식
 

@@ -116,7 +116,7 @@ POST /api/v1/orders/
 
 **Kubernetes 경계**: backend와 runner는 모두 replica 1개만 허용한다. in-memory order book 또는 profile sharding 문제가 해결되기 전에는 HPA/다중 replica를 사용하지 않는다. 자세한 계약은 [DEMO_RUNBOOK.md](./DEMO_RUNBOOK.md)에 둔다.
 
-**Exit gate**: 빈 Docker 환경에서 `make demo-up`, `make demo-seed`, `make demo-runner-up`으로 같은 참여자 흐름을 재현하고, `make backend-test`, `make participant-runner-test`가 통과한다.
+**Exit gate**: 빈 Docker 환경에서 같은 참여자 흐름을 재현하고, `make backend-test`, `make participant-runner-test`가 통과한다. 로컬 Compose로 매처와 게이트웨이를 올리던 `make demo-up`, `make demo-runner-up`은 제거했다.
 
 ### Stage 2 — 부하 생성과 기본 보호
 
