@@ -42,7 +42,7 @@ RUNNER_STRATEGY_PROJECT = stock-market-runner-$(subst _,-,$(STRATEGY))$(if $(SHA
 RUNNER_STRATEGIES := noise momentum mean_reversion liquidity_provider event_reactive
 RUNNER_UP_FLAGS ?= --build
 
-.PHONY: backend-setup backend-migrate backend-test backend-run participant-runner-test gateway-test runner-build runners-up runners-down runner-up runner-down runner-status runner-logs noise-runner-up noise-runner-down momentum-runner-up momentum-runner-down mean-reversion-runner-up mean-reversion-runner-down liquidity-provider-runner-up liquidity-provider-runner-down event-reactive-runner-up event-reactive-runner-down db-up db-tailscale-up db-status db-health db-backup db-restore db-migrate import-krx-top100 container-build container-backend-up container-down demo-up demo-seed demo-runner-up demo-logs demo-down load-backend-up load-backend-stats load-steady monitoring-config monitoring-up monitoring-down monitoring-status monitoring-logs after-tailscale after-tailscale-install test run
+.PHONY: backend-setup backend-migrate backend-test backend-run participant-runner-test gateway-test runner-build runners-up runners-down runner-up runner-down runner-status runner-logs noise-runner-up noise-runner-down momentum-runner-up momentum-runner-down mean-reversion-runner-up mean-reversion-runner-down liquidity-provider-runner-up liquidity-provider-runner-down event-reactive-runner-up event-reactive-runner-down db-up db-tailscale-up db-status db-health db-backup db-restore db-migrate import-krx-top100 container-build container-down demo-seed demo-logs demo-down load-backend-stats load-steady monitoring-config monitoring-up monitoring-down monitoring-status monitoring-logs after-tailscale after-tailscale-install test run
 backend-setup: ## Create backend virtualenv and install dependencies
 	python3 -m venv $(BACKEND_DIR)/.venv
 	$(BACKEND_PYTHON) -m pip install --upgrade pip
@@ -186,20 +186,11 @@ import-krx-top100: ## Import the latest confirmed KOSPI top 100 by trading value
 container-build: ## Build backend and participant-runner container images
 	docker compose build
 
-container-backend-up: ## Start the packaged matcher shard containers
-	docker compose up --build backend backend-1 gateway
-
 container-down: ## Stop and remove project containers (keeps PostgreSQL volume)
 	docker compose down
 
-demo-up: ## Start the packaged backend for the reproducible demo
-	docker compose up --build -d backend backend-1 gateway
-
 demo-seed: ## Create deterministic demo trader profiles in the running backend
 	docker compose exec -T backend python manage.py seed_traders --strategy $(TRADER_STRATEGY) --count $(TRADER_COUNT) --seed $(TRADER_SEED) $(if $(TRADER_SYMBOL),--symbol $(TRADER_SYMBOL),)
-
-demo-runner-up: ## Start the external participant runner with the local .env settings
-	SCENARIO_PATH=$(SCENARIO_PATH) docker compose --profile runner up --build -d participant-runner
 
 demo-logs: ## Follow backend and runner logs for the demo
 	docker compose --profile runner logs -f gateway backend backend-1 participant-runner
@@ -207,19 +198,16 @@ demo-logs: ## Follow backend and runner logs for the demo
 demo-down: ## Stop the reproducible demo containers (keeps PostgreSQL volume)
 	docker compose --profile runner down
 
-load-backend-up: ## Start backend with execution logs disabled and market always open for a load test
-	TRADE_EXECUTION_LOG_ENABLED=0 SIMULATION_MARKET_MODE=always_open docker compose up --build -d backend backend-1 gateway
-
 load-backend-stats: ## Print one backend CPU and memory snapshot during a load test
 	@backend_id=$$(docker compose ps -q backend); \
-	test -n "$$backend_id" || { echo "backend is not running; run make load-backend-up first"; exit 1; }; \
+	test -n "$$backend_id" || { echo "local compose backend is not running"; exit 1; }; \
 	docker stats --no-stream --format 'cpu={{.CPUPerc}} memory={{.MemUsage}}' "$$backend_id"
 
 load-steady: ## Run the steady order-rate k6 scenario and save its JSON summary
 	@mkdir -p $(LOADTEST_ARTIFACTS_DIR)
 	@set -eu; \
 	backend_id=$$(docker compose ps -q backend); \
-	test -n "$$backend_id" || { echo "backend is not running; run make load-backend-up first"; exit 1; }; \
+	test -n "$$backend_id" || { echo "local compose backend is not running"; exit 1; }; \
 	host_user="$$(id -u):$$(id -g)"; \
 	result_file=/results/steady-$(ORDER_RATE)ops-$(TEST_DURATION)-summary.json; \
 	TRADE_EXECUTION_LOG_ENABLED=0 docker compose --profile loadtest run --rm --no-deps \

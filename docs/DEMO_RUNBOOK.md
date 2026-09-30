@@ -4,37 +4,11 @@
 
 ## 실행
 
-```bash
-make demo-up
-make demo-seed TRADER_COUNT=100 TRADER_SEED=42
-make demo-runner-up
-make demo-logs
-```
+로컬 Compose 매처와 게이트웨이를 띄우던 `make demo-up`, `make container-backend-up`, `make demo-runner-up`은 제거했다. 운영 진입점은 GCE 게이트웨이 `:8000`이고, 시장참여자는 `participant-runner/compose.yaml`로 실행한다.
 
-- `demo-up`: backend를 Gunicorn worker 1개로 시작한다.
-- `demo-seed`: `TRADER_STRATEGY`(기본값 `noise`)로 선택한 전략의 프로필만 생성 또는 갱신한다. 같은 count·seed는 같은 설정을 만든다.
-- `demo-runner-up`: backend와 별도 컨테이너에서 HTTP 주문·취소를 전송한다.
-- `demo-logs`: `event=trade_executed`와 `event=runner_status`를 함께 관찰한다.
+`make demo-seed`는 이미 떠 있는 로컬 backend 컨테이너에만 프로필을 넣는다. `TRADER_STRATEGY`(기본값 `noise`)로 선택한 전략의 프로필만 생성 또는 갱신하며, 같은 count·seed는 같은 설정을 만든다.
 
-기본 `demo-seed`는 Noise 프로필을 만든다. 다른 전략은 같은 명령에 전략을 지정해 추가한다.
-
-```bash
-make demo-seed TRADER_STRATEGY=momentum TRADER_COUNT=20 TRADER_SEED=42
-make demo-seed TRADER_STRATEGY=mean_reversion TRADER_COUNT=20 TRADER_SEED=42
-make demo-seed TRADER_STRATEGY=liquidity_provider TRADER_COUNT=5 TRADER_SEED=42
-make demo-seed TRADER_STRATEGY=event_reactive TRADER_COUNT=50 TRADER_SEED=42
-```
-
-`event_reactive` 프로필은 휴면 풀이다. 시나리오 fixture가 없으면 주문을 내지 않는다. 뉴스 spike를 재현하려면 baseline과 휴면 풀을 같이 만든 뒤 fixture를 넘긴다.
-
-```bash
-make demo-seed TRADER_STRATEGY=noise TRADER_COUNT=20 TRADER_SEED=42
-make demo-seed TRADER_STRATEGY=event_reactive TRADER_COUNT=50 TRADER_SEED=42
-make demo-runner-up SCENARIO_PATH=/app/scenarios/breaking_news.json
-make demo-logs
-```
-
-기본 fixture는 시작 후 30초에 `breaking_news` 이벤트를 한 번 발생시킨다. 로그에서 `event=news_received`, `event=news_activated`, `event=news_first_reaction`, `event=news_completed`를 확인할 수 있다. 이벤트 구간이 끝나면 `event_reactive`는 다시 휴면하고 baseline 트레이더만 남는다.
+`event_reactive` 프로필은 휴면 풀이다. 시나리오 fixture가 없으면 주문을 내지 않는다. 라이브 이벤트는 analyzer가 GCE `POST /api/v1/events/`로 넣고, 이벤트 러너가 pending을 읽어 반응한다.
 
 개인 runner 범위는 Git 제외 파일 `participant-runner/.env`에서 조정한다.
 
@@ -46,11 +20,7 @@ RUNNER_STATUS_LOG_INTERVAL_TICKS=60
 
 ## 종료와 초기화
 
-```bash
-make demo-down
-```
-
-이는 컨테이너와 네트워크만 제거하고 `postgres-data` volume은 유지한다. backend를 재시작하면 메모리 호가창은 비워지지만 트레이더 프로필과 KRX 참조 데이터는 남는다. volume까지 삭제하는 명령은 의도적으로 일반 runbook에 포함하지 않는다.
+운영 러너는 `participant-runner/compose.yaml` 프로젝트에서 내린다. `make demo-down`은 루트 Compose 프로젝트 전체를 내리므로 PostgreSQL 컨테이너도 함께 멈춘다. `postgres-data` volume은 유지된다.
 
 ## Kubernetes로 확장할 때의 계약
 

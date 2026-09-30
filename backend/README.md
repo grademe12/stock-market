@@ -23,48 +23,20 @@ make backend-run
 
 프로젝트 루트에서 실행합니다. backend 컨테이너는 Gunicorn **worker 1개**로 실행한다. 같은 종목 호가창을 두 워커가 나누면 체결이 어긋나기 때문이다. 코어 2개를 쓸 때는 `--workers`를 늘리지 않고 컨테이너를 2개 띄운 뒤 종목을 샤드한다. `--threads 4`는 같은 프로세스 안에서 HTTP 요청을 처리할 수 있게 한다.
 
-```bash
-docker compose up --build backend backend-1
-# 또는 make container-backend-up
-```
+로컬 Compose로 매처와 게이트웨이를 띄우던 `make container-backend-up`은 제거했다. 운영 진입점은 GCE 게이트웨이 `:8000`이다.
 
 `http://127.0.0.1:8000/api/v1/health/`는 프로세스 liveness,
 `http://127.0.0.1:8000/api/v1/ready/`는 데이터베이스 연결을 포함한 readiness
 endpoint다. Compose backend는 별도 PostgreSQL 컨테이너를 사용하며 데이터는 named
-volume `postgres-data`에 보존된다. 컨테이너를 내리려면 `make container-down`을
-사용한다. volume까지 지우려면 명시적으로 `docker compose down --volumes`를 실행해야 한다.
+volume `postgres-data`에 보존된다. `make container-down`은 루트 Compose 프로젝트 전체를 내리므로 운영 중인 PostgreSQL도 함께 멈춘다. volume까지 지우려면 명시적으로 `docker compose down --volumes`를 실행해야 한다.
 
 Compose 설정은 backend 컨테이너를 CPU 1코어(`cpus: "1.0"`)와 메모리 4GiB(`memory: 4G`)로 제한한다. 이는 이미지 자체가 아니라 로컬 Compose 실행 정책이다.
 
 `TRADE_EXECUTION_LOG_ENABLED=1`이면 체결 1건마다 backend 표준 출력에 `event=trade_executed`, 종목·가격·수량·매수/매도 주문 ID를 남긴다. Compose 개발 설정에서는 기본으로 켜져 있어 `docker compose logs -f backend`로 확인할 수 있다. k6처럼 성능을 측정하는 실험에서는 로그 I/O가 결과에 영향을 줄 수 있으므로 `0`으로 끈다.
 
-외부 시장참여자까지 함께 실행하려면 활성 트레이더 프로필을 만든 후 다음을 사용한다.
+`seed_traders`는 선택한 전략의 전용 ID를 사용해 결정론적으로 upsert하며, 직접 만든 다른 트레이더는 변경하지 않는다. `event_reactive`는 뉴스 반응용 휴면 풀이다. fixture 시나리오뿐 아니라 analyzer에서 들어온 live event도 runner가 pending inbox에서 가져와 반응 주문을 만든다. 모델 추론은 analyzer에서 한 번만 수행하고 runner는 direction/impact를 로컬 deterministic reaction preset으로 변환한다.
 
-```bash
-docker compose --profile runner up --build
-```
-
-재현 가능한 데모는 아래 명령으로 실행한다. `seed_traders`는 선택한 전략의 전용 ID를 사용해 결정론적으로 upsert하며, 직접 만든 다른 트레이더는 변경하지 않는다.
-
-```bash
-make demo-up
-make demo-seed TRADER_COUNT=100 TRADER_SEED=42
-make demo-runner-up
-make demo-logs
-```
-
-다른 전략 프로필은 `TRADER_STRATEGY`으로 결정론적으로 생성한다.
-
-```bash
-make demo-seed TRADER_STRATEGY=momentum TRADER_COUNT=20
-make demo-seed TRADER_STRATEGY=mean_reversion TRADER_COUNT=20
-make demo-seed TRADER_STRATEGY=liquidity_provider TRADER_COUNT=5
-make demo-seed TRADER_STRATEGY=event_reactive TRADER_COUNT=50
-```
-
-`event_reactive`는 뉴스 반응용 휴면 풀이다. fixture 시나리오뿐 아니라 analyzer에서 들어온 live event도 runner가 pending inbox에서 가져와 반응 주문을 만든다. 모델 추론은 analyzer에서 한 번만 수행하고 runner는 direction/impact를 로컬 deterministic reaction preset으로 변환한다.
-
-정리와 상세 실행 순서는 [데모 runbook](../docs/DEMO_RUNBOOK.md)을 참고한다.
+로컬 Compose 데모를 올리던 `make demo-up`은 제거했다. 운영 러너는 `participant-runner/compose.yaml`로 GCE 게이트웨이에 붙는다.
 
 ## Current API
 
@@ -95,7 +67,7 @@ make demo-seed TRADER_STRATEGY=event_reactive TRADER_COUNT=50
 
 이벤트 ingest API는 `market-event-analyzer`가 생성한 `event_id`, `symbol`, `event_type`, `direction`, `confidence`, `impact`, `occurred_at`, `detected_at`, `source`, `source_item_id`, `headline`을 받는다. `occurred_at`은 정확한 시각을 모르는 공급자를 위해 `null`일 수 있다. 신규 이벤트는 HTTP 201과 `status: accepted`, 동일 payload의 재전송은 HTTP 200과 `status: duplicate`를 반환한다. 같은 `event_id`에 다른 payload가 오면 HTTP 409로 거절한다. 수신 이벤트는 장 상태와 무관하게 `pending`으로 보관한다. runner는 장중에만 자기 `event_reactive` 종목의 pending 이벤트를 조회하고, 로컬 반응 계획을 만든 뒤 ACK한다. ACK된 이벤트는 `dispatched`가 되며 같은 ACK는 idempotent하다. `SIMULATION_EVENT_MAX_AGE_SECONDS`(기본 259200초 = 72시간)를 넘긴 pending 이벤트는 `stale`로 바뀌며 더 이상 runner에 전달되지 않는다. stale 기준은 정확한 `occurred_at`이 있으면 그 시각을, 없으면 `detected_at`을 사용한다.
 
-기본 `SIMULATION_MARKET_MODE=scheduled`에서는 KST 평일 09:00 이상 15:30 미만에만 신규 주문을 받는다. 장외 `POST /api/v1/orders/`는 HTTP 409와 `{"detail":"market is closed"}`로 거절되며, 조회와 주문 취소 API는 계속 사용할 수 있다. 새 평일 거래일을 처음 인지하면 matcher는 이전 거래일의 in-memory 호가, 최근 체결, order-id map을 비우고 해당 종목의 `orderbook_depth` metric도 0으로 맞춘다. 실제 KRX 공휴일 달력은 아직 반영하지 않는다. 인프라 부하 실험처럼 시간 제한이 불필요한 경우에만 `SIMULATION_MARKET_MODE=always_open`을 명시하며, 이 모드에서는 날짜 기반 rollover도 수행하지 않는다. `make load-backend-up`은 이 실험 모드를 자동으로 사용한다.
+기본 `SIMULATION_MARKET_MODE=scheduled`에서는 KST 평일 09:00 이상 15:30 미만에만 신규 주문을 받는다. 장외 `POST /api/v1/orders/`는 HTTP 409와 `{"detail":"market is closed"}`로 거절되며, 조회와 주문 취소 API는 계속 사용할 수 있다. 새 평일 거래일을 처음 인지하면 matcher는 이전 거래일의 in-memory 호가, 최근 체결, order-id map을 비우고 해당 종목의 `orderbook_depth` metric도 0으로 맞춘다. 실제 KRX 공휴일 달력은 아직 반영하지 않는다. 인프라 부하 실험처럼 시간 제한이 불필요한 경우에만 `SIMULATION_MARKET_MODE=always_open`을 명시하며, 이 모드에서는 날짜 기반 rollover도 수행하지 않는다.
 
 주문 취소는 idempotent하다. 열린 주문은 `status: CANCELED`로 취소되고, 이미 체결·취소되어 호가창에 없는 주문은 `status: ALREADY_CLOSED`로 정상 응답한다. 이는 TTL 기반 runner의 지연 취소를 오류와 구분하기 위한 현재 단계의 계약이다.
 
