@@ -3,6 +3,23 @@
 주식 거래 애플리케이션을 모방한 학습용 프로젝트입니다.  
 단일 Django 매칭 엔진에서 시작해 부하 제어·테스트·모니터링·이벤트 파이프라인을 필요한 시점에 하나씩 도입합니다.
 
+## 한눈에 보기
+
+가상 트레이더 수천 명이 주문하는 매칭 엔진을 GCE에 올리고, 병목을 하나씩 재며 구조를 바꿨습니다. 날짜별 조건·숫자·해석 한계는 [`report/`](report/)에 있습니다.
+
+| 단계 | 바꾼 것 | 결과 |
+|---|---|---|
+| [Day 1](report/DAY1_LOAD_BOTTLENECK_REPORT.md) | 5종목, 트레이더 2,000명 | 주문마다 원격 DB를 읽어 처리량이 절반으로 감소. 기동 시 캐시로 주문 평균 38ms → 1.8ms |
+| [Day 2](report/DAY2_MATCHER_SHARD_REPORT.md) | 매처를 종목 단위 프로세스 2개로 샤딩 | 두 코어를 고르게 사용. 처리량은 그대로(병목은 runner) |
+| [Day 3](report/DAY3_MATCHER_SATURATION_REPORT.md) | 동시 전송 64, 틱 250ms | 호가 잔량 1.1만 → 190만, 초당 주문 139 → 17건, p50 3.5 → 300ms |
+| [Day 4](report/DAY4_VERTICAL_SCALE_REPORT.md) | 공유 코어 `e2-medium` → `e2-standard-4` | 접수는 회복, 잔량은 다시 증가. 하드웨어는 시간을 벌 뿐 |
+| [Day 5](report/DAY5_SINGLE_ENTRY_GATEWAY_REPORT.md) | 종목 라우터 단일 진입점 + 매처 4개(loopback) | 3일 연속 초당 약 146건, p50 2.7ms, p99 19ms, 5xx 0 |
+
+- 코어를 다 못 쓴 이유: Python GIL, 프로세스 메모리에 있는 호가창, 공유 코어 VM, 코어 수와 프로세스 수 불일치
+- 가장 큰 교훈: CPU 사용률은 결과일 뿐이고, 주문 한 건에 드는 일의 양을 같이 봐야 한다
+- 코드는 AI 코딩 에이전트가 작성했고, 질문·실험 설계·판단은 직접 했습니다
+- 프로젝트 설명: <https://woosupar.dev/projects/stock-market/>
+
 ## 문서
 
 | 문서 | 내용 |
