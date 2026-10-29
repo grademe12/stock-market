@@ -18,7 +18,7 @@
 - 지정가 주문, 가격·시간 우선, 부분 체결, 주문 잔량 및 취소 처리
 - 체결 발생 시 backend 표준 출력에 체결 정보 기록
 
-호가창과 주문 상태는 현재 backend 프로세스 메모리에 있다. 따라서 backend를 재시작하면 호가창은 초기화되며, 여러 matcher 인스턴스로 수평 확장하는 구조는 아직 구현하지 않았다.
+호가창과 주문 상태는 현재 backend 프로세스 메모리에 있다. backend를 재시작하면 호가창은 초기화된다. 같은 종목은 프로세스 하나에서만 체결하며, 유니버스 종목은 샤드 두 개로 나눌 수 있다.
 
 ### 주문 체결과 트레이더의 상호작용
 
@@ -110,6 +110,7 @@ KRX 종목 풀은 아직 주문 API와 메모리 호가창에 연결하지 않�
 - [KRX KOSPI 상위 100개 적재](KRX_TOP100_REFERENCE_DATA_PLAN.md)
 - [k6 기준 부하 측정](LOAD_TEST_BASELINE.md)
 - [Day 1 부하·병목 보고서](../report/DAY1_LOAD_BOTTLENECK_REPORT.md)
+- [Day 2 매처 샤드·처리량 보고서](../report/DAY2_MATCHER_SHARD_REPORT.md)
 - [Day 3 매칭기 포화 보고서](../report/DAY3_MATCHER_SATURATION_REPORT.md)
 - [Day 4 수직 스케일 보고서](../report/DAY4_VERTICAL_SCALE_REPORT.md)
 - [Day 5 단일 진입점 보고서](../report/DAY5_SINGLE_ENTRY_GATEWAY_REPORT.md)
