@@ -33,6 +33,7 @@
 | [docs/UBUNTU_SETUP.md](docs/UBUNTU_SETUP.md) | Ubuntu/WSL 1회 셋업 체크리스트 |
 | [docs/GCP_DEPLOYMENT_READINESS.md](docs/GCP_DEPLOYMENT_READINESS.md) | Tailscale 기반 GCE·로컬 PostgreSQL 배포 결정과 완료 조건 |
 | [docs/GCP_RESTORE_RUNBOOK.md](docs/GCP_RESTORE_RUNBOOK.md) | GCP 인프라 복구·계정 이전·비용 안전 철거 절차 |
+| [docs/EVENT_SPIKE_ROADMAP.md](docs/EVENT_SPIKE_ROADMAP.md) | 호가창 비용 개선(Day 6) → 공시 재생 실험 → 정규장 실전 운영 로드맵 |
 | [observability/README.md](observability/README.md) | Prometheus·Grafana 백엔드 모니터링 실행 방법 |
 
 ## 프로젝트 구조
