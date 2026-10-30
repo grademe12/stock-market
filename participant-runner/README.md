@@ -83,7 +83,7 @@ make runner-logs STRATEGY=noise SHARD=0
 make noise-runner-down
 ```
 
-`runners-up`은 전략마다 독립 runner를 띄운다. noise는 `/api/v1/ready/`의 `shard_count`만큼 컨테이너를 나눈다. 다른 전략은 종목 전체를 한 컨테이너가 맡는다. 특정 전략만 재시작하거나 중지해도 다른 전략에는 영향을 주지 않는다. 각 runner는 backend에서 해당 전략의 활성 프로필만 고르고, `RUNNER_SHARD_INDEX`가 있으면 그 샤드 종목만 남긴다.
+`runners-up`은 전략마다 독립 runner를 띄운다. noise와 liquidity provider는 `/api/v1/ready/`의 `shard_count`만큼 컨테이너를 나눈다. 다른 전략은 종목 전체를 한 컨테이너가 맡는다. 특정 전략만 재시작하거나 중지해도 다른 전략에는 영향을 주지 않는다. 각 runner는 backend에서 해당 전략의 활성 프로필만 고르고, `RUNNER_SHARD_INDEX`가 있으면 그 샤드 종목만 남긴다.
 
 Compose profile은 `participant-runner/.env`가 있으면 자동으로 읽는다. 이 파일은 Git에서 제외되며, `MAX_TRADERS=100`처럼 개인 실험 범위를 둘 수 있다. 설정이 없으면 runner의 기본값을 사용한다.
 

@@ -70,14 +70,16 @@ runner-build: ## Build the participant-runner image
 runners-up: runner-build ## Start one runner for every supported strategy
 	@set -e; \
 	$(MAKE) --no-print-directory noise-runner-up RUNNER_UP_FLAGS=; \
-	for strategy in momentum mean_reversion liquidity_provider event_reactive; do \
+	$(MAKE) --no-print-directory liquidity-provider-runner-up RUNNER_UP_FLAGS=; \
+	for strategy in momentum mean_reversion event_reactive; do \
 		$(MAKE) --no-print-directory runner-up STRATEGY=$$strategy RUNNER_UP_FLAGS=; \
 	done
 
 runners-down: ## Stop every strategy runner
 	@set -e; \
 	$(MAKE) --no-print-directory noise-runner-down; \
-	for strategy in momentum mean_reversion liquidity_provider event_reactive; do \
+	$(MAKE) --no-print-directory liquidity-provider-runner-down; \
+	for strategy in momentum mean_reversion event_reactive; do \
 		$(MAKE) --no-print-directory runner-down STRATEGY=$$strategy; \
 	done
 
@@ -98,6 +100,14 @@ runner-up:
 		momentum-) echo 9103;; \
 		mean_reversion-) echo 9104;; \
 		liquidity_provider-) echo 9105;; \
+		liquidity_provider-0) echo 9113;; \
+		liquidity_provider-1) echo 9114;; \
+		liquidity_provider-2) echo 9116;; \
+		liquidity_provider-3) echo 9117;; \
+		liquidity_provider-4) echo 9118;; \
+		liquidity_provider-5) echo 9119;; \
+		liquidity_provider-6) echo 9120;; \
+		liquidity_provider-7) echo 9121;; \
 		event_reactive-) echo 9106;; \
 		*) echo 0;; \
 	esac)"; \
@@ -143,11 +153,20 @@ mean-reversion-runner-up: ## Start the mean-reversion strategy runner
 mean-reversion-runner-down: ## Stop the mean-reversion strategy runner
 	$(MAKE) --no-print-directory runner-down STRATEGY=mean_reversion
 
-liquidity-provider-runner-up: ## Start the liquidity-provider strategy runner
-	$(MAKE) --no-print-directory runner-up STRATEGY=liquidity_provider
-
-liquidity-provider-runner-down: ## Stop the liquidity-provider strategy runner
+liquidity-provider-runner-up: ## Start one liquidity-provider runner per matcher shard
 	$(MAKE) --no-print-directory runner-down STRATEGY=liquidity_provider
+	@count="$$(python3 participant-runner/scripts/matcher_shard_count.py)"; \
+	i=0; \
+	while [ "$$i" -lt "$$count" ]; do \
+		$(MAKE) --no-print-directory runner-up STRATEGY=liquidity_provider SHARD=$$i RUNNER_UP_FLAGS="$(RUNNER_UP_FLAGS)"; \
+		i=$$((i + 1)); \
+	done
+
+liquidity-provider-runner-down: ## Stop every liquidity-provider shard and the unsharded runner
+	$(MAKE) --no-print-directory runner-down STRATEGY=liquidity_provider
+	@for shard in 0 1 2 3 4 5 6 7; do \
+		$(MAKE) --no-print-directory runner-down STRATEGY=liquidity_provider SHARD=$$shard; \
+	done
 
 event-reactive-runner-up: ## Start the event-reactive strategy runner
 	$(MAKE) --no-print-directory runner-up STRATEGY=event_reactive
