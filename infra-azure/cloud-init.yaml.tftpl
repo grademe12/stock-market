@@ -1,0 +1,40 @@
+#cloud-config
+package_update: true
+packages:
+  - docker.io
+  - curl
+  - python3
+
+write_files:
+  - path: /etc/stock-market/bootstrap.conf
+    permissions: "0600"
+    content: |
+      ${indent(6, bootstrap_config)}
+  - path: /usr/local/sbin/stock-market-bootstrap
+    permissions: "0700"
+    content: |
+      ${indent(6, bootstrap_script)}
+  - path: /etc/systemd/system/stock-market-bootstrap.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Stock market backend bootstrap (Tailscale join, backend.env from Key Vault)
+      Wants=network-online.target
+      After=network-online.target docker.service tailscaled.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/usr/local/sbin/stock-market-bootstrap
+      # Secrets may not exist yet on first boot; retry until they are set.
+      Restart=on-failure
+      RestartSec=30
+
+      [Install]
+      WantedBy=multi-user.target
+
+runcmd:
+  - curl -fsSL https://tailscale.com/install.sh | sh
+  - systemctl enable --now docker
+  - systemctl daemon-reload
+  - systemctl enable --now stock-market-bootstrap.service
