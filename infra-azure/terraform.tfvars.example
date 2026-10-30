@@ -1,0 +1,12 @@
+subscription_id      = "00000000-0000-0000-0000-000000000000"
+github_repository    = "grademe12/stock-market"
+admin_ssh_public_key = "ssh-ed25519 AAAA... you@macbook"
+postgres_host        = "local-db.example-tailnet.ts.net"
+django_allowed_hosts = "stock-market-gce.example-tailnet.ts.net,stock-market-gce"
+
+# Optional overrides
+# location           = "koreacentral"
+# vm_size            = "Standard_D4as_v5"
+# tailscale_hostname = "stock-market-gce"
+# tailscale_tags     = "tag:stock-market-backend"
+# github_deploy_ref  = "refs/heads/main"
