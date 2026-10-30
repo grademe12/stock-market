@@ -31,6 +31,13 @@ resource "azurerm_linux_virtual_machine" "backend" {
     type = "SystemAssigned"
   }
 
+  # custom_data only runs on first boot, and changing it replaces the VM
+  # (new disk, new Tailscale node). Roll out bootstrap changes deliberately
+  # with terraform apply -replace=azurerm_linux_virtual_machine.backend.
+  lifecycle {
+    ignore_changes = [custom_data]
+  }
+
   # cloud-init installs Docker and Tailscale, writes the non-secret settings,
   # and enables a boot-time service that reads Key Vault and writes backend.env.
   custom_data = base64encode(templatefile("${path.module}/cloud-init.yaml.tftpl", {

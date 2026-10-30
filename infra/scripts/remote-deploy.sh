@@ -50,9 +50,9 @@ if [[ ! -f "${ENV_FILE}" ]]; then
   exit 1
 fi
 
-for command_name in docker gcloud tailscale; do
+for command_name in docker python3 tailscale; do
   if ! command -v "${command_name}" >/dev/null 2>&1; then
-    echo "custom image contract violation: ${command_name} is not installed" >&2
+    echo "VM contract violation: ${command_name} is not installed" >&2
     exit 1
   fi
 done
@@ -66,10 +66,18 @@ if [[ "${SKIP_PULL:-}" == "1" ]]; then
   sudo docker image inspect "${IMAGE}" >/dev/null
   sudo docker image inspect "${GATEWAY_IMAGE}" >/dev/null
 else
-  registry_token="$(gcloud auth print-access-token)"
-  printf '%s' "${registry_token}" \
-    | sudo docker login -u oauth2accesstoken --password-stdin "${REGISTRY_HOST}"
-  unset registry_token
+  # GCP Artifact Registry needs the VM service account token.
+  # GHCR images for the Azure VM are public and need no login.
+  if [[ "${REGISTRY_HOST}" == *-docker.pkg.dev ]]; then
+    if ! command -v gcloud >/dev/null 2>&1; then
+      echo "gcloud is required to pull from ${REGISTRY_HOST}" >&2
+      exit 1
+    fi
+    registry_token="$(gcloud auth print-access-token)"
+    printf '%s' "${registry_token}" \
+      | sudo docker login -u oauth2accesstoken --password-stdin "${REGISTRY_HOST}"
+    unset registry_token
+  fi
   sudo docker pull "${IMAGE}"
   sudo docker pull "${GATEWAY_IMAGE}"
 fi

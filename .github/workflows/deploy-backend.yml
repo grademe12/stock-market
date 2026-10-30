@@ -43,8 +43,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
-      - name: Validate Terraform
+      - name: Validate Terraform (GCP)
         working-directory: infra
+        run: |
+          terraform init -backend=false
+          terraform fmt -check -recursive
+          terraform validate
+      - name: Validate Terraform (Azure)
+        working-directory: infra-azure
         run: |
           terraform init -backend=false
           terraform fmt -check -recursive
@@ -102,3 +108,66 @@ jobs:
             --tunnel-through-iap \
             --zone "${GCE_ZONE}" \
             --command "chmod 700 /tmp/remote-deploy.sh && sudo GATEWAY_IMAGE='${GATEWAY_IMAGE}' bash /tmp/remote-deploy.sh '${IMAGE}' '${REGISTRY_HOST}'"
+
+  deploy-azure:
+    needs: [test, validate-infra]
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      github.event.repository.fork == false &&
+      vars.AZURE_CLIENT_ID != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set image names
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "REGISTRY_HOST=ghcr.io" >> "$GITHUB_ENV"
+          echo "IMAGE=ghcr.io/${owner}/stock-market-backend:${GITHUB_SHA}" >> "$GITHUB_ENV"
+          echo "GATEWAY_IMAGE=ghcr.io/${owner}/stock-market-gateway:${GITHUB_SHA}" >> "$GITHUB_ENV"
+
+      - name: Build and push backend and gateway images
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+          source_label="org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
+          docker build -f backend/Dockerfile --label "${source_label}" -t "${IMAGE}" .
+          docker build -f gateway/Dockerfile --label "${source_label}" -t "${GATEWAY_IMAGE}" .
+          docker push "${IMAGE}"
+          docker push "${GATEWAY_IMAGE}"
+
+      - name: Deploy image to the backend VM
+        env:
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_VM_NAME: ${{ vars.AZURE_VM_NAME }}
+        run: |
+          # Run Command reports success even when the script fails,
+          # so the wrapper prints a marker only after remote-deploy.sh exits 0.
+          {
+            echo "set -euo pipefail"
+            echo "cat > /tmp/remote-deploy.sh <<'REMOTE_DEPLOY'"
+            cat infra/scripts/remote-deploy.sh
+            echo "REMOTE_DEPLOY"
+            echo "GATEWAY_IMAGE='${GATEWAY_IMAGE}' bash /tmp/remote-deploy.sh '${IMAGE}' '${REGISTRY_HOST}'"
+            echo "echo STOCK_MARKET_DEPLOY_OK"
+          } > run-deploy.sh
+          message="$(az vm run-command invoke \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --name "${AZURE_VM_NAME}" \
+            --command-id RunShellScript \
+            --scripts @run-deploy.sh \
+            --query "value[0].message" \
+            --output tsv)"
+          printf '%s\n' "${message}"
+          grep -q STOCK_MARKET_DEPLOY_OK <<<"${message}"

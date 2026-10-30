@@ -25,10 +25,14 @@ json_field() {
 vault_token="$(curl --fail --silent --show-error -H "Metadata: true" "${IMDS_TOKEN_URL}" | json_field access_token)"
 
 secret_value() {
-  curl --fail --silent --show-error \
+  local response
+  if ! response="$(curl --fail --silent --show-error \
     -H "Authorization: Bearer ${vault_token}" \
-    "https://${KEY_VAULT_NAME}.vault.azure.net/secrets/$1?api-version=7.4" \
-    | json_field value
+    "https://${KEY_VAULT_NAME}.vault.azure.net/secrets/$1?api-version=7.4")"; then
+    echo "cannot read Key Vault secret '$1' from ${KEY_VAULT_NAME}; set it with az keyvault secret set" >&2
+    return 1
+  fi
+  printf '%s' "${response}" | json_field value
 }
 
 systemctl enable --now docker
