@@ -10,6 +10,9 @@ if [[ -z "${GATEWAY_IMAGE}" ]]; then
 fi
 
 ENV_FILE=/etc/stock-market/backend.env
+# Operator overrides. VM bootstrap rewrites backend.env on every boot but never touches this file.
+OVERRIDES_FILE=/etc/stock-market/overrides.env
+MARKET_MODE="${MARKET_MODE:-unchanged}"
 SHARDS_FILE=/etc/stock-market/shards.env
 LEGACY_CONTAINER=stock-market-backend
 SHARD_COUNT_MAXIMUM=8
@@ -49,6 +52,29 @@ if [[ ! -f "${ENV_FILE}" ]]; then
   echo "missing ${ENV_FILE}; VM bootstrap has not completed" >&2
   exit 1
 fi
+
+case "${MARKET_MODE}" in
+  unchanged | "") ;;
+  scheduled | always_open)
+    {
+      sudo grep -v '^SIMULATION_MARKET_MODE=' "${OVERRIDES_FILE}" 2>/dev/null || true
+      printf 'SIMULATION_MARKET_MODE=%s\n' "${MARKET_MODE}"
+    } | sudo tee "${OVERRIDES_FILE}.new" >/dev/null
+    sudo chmod 600 "${OVERRIDES_FILE}.new"
+    sudo mv "${OVERRIDES_FILE}.new" "${OVERRIDES_FILE}"
+    ;;
+  *)
+    echo "MARKET_MODE must be unchanged, scheduled, or always_open" >&2
+    exit 1
+    ;;
+esac
+
+override_args=()
+if sudo test -f "${OVERRIDES_FILE}"; then
+  override_args=(--env-file "${OVERRIDES_FILE}")
+fi
+current_market_mode="$(sudo sed -n 's/^SIMULATION_MARKET_MODE=//p' "${OVERRIDES_FILE}" 2>/dev/null || true)"
+echo "market mode: ${current_market_mode:-scheduled (default)}"
 
 for command_name in docker python3 tailscale; do
   if ! command -v "${command_name}" >/dev/null 2>&1; then
@@ -184,6 +210,7 @@ start_shard() {
     --network host \
     --restart unless-stopped \
     --env-file "${ENV_FILE}" \
+    "${override_args[@]}" \
     -e "PORT=${port}" \
     -e "GUNICORN_BIND=127.0.0.1" \
     -e "SIMULATION_SHARD_COUNT=${SHARD_COUNT}" \

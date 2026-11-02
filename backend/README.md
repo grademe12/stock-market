@@ -69,6 +69,15 @@ Compose 설정은 backend 컨테이너를 CPU 1코어(`cpus: "1.0"`)와 메모�
 
 기본 `SIMULATION_MARKET_MODE=scheduled`에서는 KST 평일 09:00 이상 15:30 미만에만 신규 주문을 받는다. 장외 `POST /api/v1/orders/`는 HTTP 409와 `{"detail":"market is closed"}`로 거절되며, 조회와 주문 취소 API는 계속 사용할 수 있다. 새 평일 거래일을 처음 인지하면 matcher는 이전 거래일의 in-memory 호가, 최근 체결, order-id map을 비우고 해당 종목의 `orderbook_depth` metric도 0으로 맞춘다. 실제 KRX 공휴일 달력은 아직 반영하지 않는다. 인프라 부하 실험처럼 시간 제한이 불필요한 경우에만 `SIMULATION_MARKET_MODE=always_open`을 명시하며, 이 모드에서는 날짜 기반 rollover도 수행하지 않는다.
 
+Azure VM에서는 이 값을 `/etc/stock-market/overrides.env`에 둔다. VM 부트스트랩은 재부팅마다 `backend.env`를 다시 쓰지만 이 파일은 건드리지 않으므로 모드가 유지된다. 전환은 배포 워크플로를 수동 실행하면서 `market_mode`를 고르면 된다. 코드 push로 도는 배포는 기본값 `unchanged`라 현재 모드를 바꾸지 않는다.
+
+```bash
+gh workflow run deploy-backend.yml -f market_mode=always_open   # 장외에도 주문 접수 (부하 실험)
+gh workflow run deploy-backend.yml -f market_mode=scheduled     # 정규장 시간만
+```
+
+runner의 `SIMULATION_MARKET_MODE`는 `participant-runner/.env`에서 따로 맞춘다.
+
 주문 취소는 idempotent하다. 열린 주문은 `status: CANCELED`로 취소되고, 이미 체결·취소되어 호가창에 없는 주문은 `status: ALREADY_CLOSED`로 정상 응답한다. 이는 TTL 기반 runner의 지연 취소를 오류와 구분하기 위한 현재 단계의 계약이다.
 
 최근 체결 API는 matcher가 종목별로 메모리에 보관하는 최대 200건을 최신순으로 반환한다. `limit`은 기본 50, 최대 200이다. 체결에는 UTC `executed_at`이 포함되며 backend 재시작 시 호가창과 함께 초기화된다.

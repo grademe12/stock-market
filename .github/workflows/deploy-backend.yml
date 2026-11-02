@@ -2,6 +2,15 @@ name: Deploy backend
 
 on:
   workflow_dispatch:
+    inputs:
+      market_mode:
+        description: Matcher market mode on the Azure VM. unchanged keeps the current mode.
+        type: choice
+        default: unchanged
+        options:
+          - unchanged
+          - scheduled
+          - always_open
   pull_request:
     branches: [main]
     paths:
@@ -151,6 +160,7 @@ jobs:
         env:
           AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
           AZURE_VM_NAME: ${{ vars.AZURE_VM_NAME }}
+          MARKET_MODE: ${{ inputs.market_mode || 'unchanged' }}
         run: |
           # Run Command reports success even when the script fails,
           # so the wrapper prints a marker only after remote-deploy.sh exits 0.
@@ -161,7 +171,7 @@ jobs:
             echo "cat > /tmp/remote-deploy.sh <<'REMOTE_DEPLOY'"
             cat infra/scripts/remote-deploy.sh
             echo "REMOTE_DEPLOY"
-            echo "GATEWAY_IMAGE='${GATEWAY_IMAGE}' bash /tmp/remote-deploy.sh '${IMAGE}' '${REGISTRY_HOST}'"
+            echo "MARKET_MODE='${MARKET_MODE}' GATEWAY_IMAGE='${GATEWAY_IMAGE}' bash /tmp/remote-deploy.sh '${IMAGE}' '${REGISTRY_HOST}'"
             echo "echo STOCK_MARKET_DEPLOY_OK"
           } > run-deploy.sh
           message="$(az vm run-command invoke \
