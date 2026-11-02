@@ -16,6 +16,15 @@ from gateway.routing import (
 )
 
 
+class GatewayHTTPServer(ThreadingHTTPServer):
+    # socketserver listens with a backlog of 5 by default. Every runner request
+    # opens a new connection, so a burst overflows that queue, the kernel drops
+    # the handshake, and the client waits for a TCP retransmit (about 1s).
+    # The matcher shards (gunicorn) already listen with 2048. The kernel caps
+    # this value at net.core.somaxconn.
+    request_queue_size = 2048
+
+
 class GatewayHandler(BaseHTTPRequestHandler):
     tickers: tuple[str, ...] = ()
     shard_count: int = 1
@@ -165,5 +174,5 @@ def serve(
         shard_urls=shard_urls,
         public_port=port,
     )
-    server = ThreadingHTTPServer((bind, port), handler)
+    server = GatewayHTTPServer((bind, port), handler)
     server.serve_forever()
