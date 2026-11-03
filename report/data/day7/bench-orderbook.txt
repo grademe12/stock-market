@@ -1,0 +1,19 @@
+# before (ReferenceOrderBook = original list book)
+python 3.13.5, levels/side=20, qty 1-15, seed=7
+per call: median / p99
+
+impl | depth | prefill | rss MiB | rest | match | cancel | lookup | snapshot | depth
+--- | --- | --- | --- | --- | --- | --- | --- | --- | ---
+reference | 10,000 | 0.1 s | 4 | 1.1 ms / 1.5 ms | 27.9 us / 83.8 us | 974.7 us / 2.6 ms | 965.7 us / 2.5 ms | 1.6 ms / 1.8 ms | 1.5 ms / 1.6 ms
+reference | 100,000 | 0.7 s | 40 | 23.8 ms / 29.6 ms | 76.3 us / 121.2 us | 16.1 ms / 49.2 ms | 28.1 ms / 45.9 ms | 35.7 ms / 50.3 ms | 33.8 ms / 36.8 ms
+reference | 1,000,000 | 8.7 s | 382 | 315.8 ms / 319.9 ms | 658.6 us / 1.2 ms | 299.4 ms / 529.1 ms | 251.1 ms / 538.3 ms | 406.5 ms / 441.1 ms | 433.0 ms / 476.5 ms
+
+# after (OrderBook, price levels + index + running totals)
+python 3.13.5, levels/side=20, qty 1-15, seed=7
+per call: median / p99
+
+impl | depth | prefill | rss MiB | rest | match | cancel | lookup | snapshot | depth
+--- | --- | --- | --- | --- | --- | --- | --- | --- | ---
+current | 10,000 | 0.1 s | 4 | 4.8 us / 7.8 us | 24.1 us / 48.0 us | 2.1 us / 3.5 us | 1.4 us / 1.7 us | 26.1 us / 46.1 us | 0.7 us / 5.0 us
+current | 100,000 | 1.0 s | 43 | 4.7 us / 9.7 us | 21.8 us / 36.5 us | 1.9 us / 2.5 us | 1.3 us / 1.4 us | 24.0 us / 38.5 us | 0.7 us / 3.0 us
+current | 1,000,000 | 10.4 s | 434 | 5.3 us / 12.5 us | 24.7 us / 50.0 us | 2.1 us / 3.2 us | 1.3 us / 1.7 us | 24.8 us / 40.1 us | 0.7 us / 3.5 us

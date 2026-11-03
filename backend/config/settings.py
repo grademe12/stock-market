@@ -60,6 +60,13 @@ SIMULATION_LISTEN_PORT = _env_int(
     minimum=1,
     maximum=65535,
 )
+# Matcher-side safety net: resting orders older than this are dropped. 0 disables it.
+MATCHER_ORDER_MAX_AGE_SECONDS = _env_int(
+    "MATCHER_ORDER_MAX_AGE_SECONDS",
+    0,
+    minimum=0,
+    maximum=24 * 60 * 60,
+)
 SIMULATION_EVENT_MAX_AGE_SECONDS = _env_int(
     "SIMULATION_EVENT_MAX_AGE_SECONDS",
     72 * 60 * 60,

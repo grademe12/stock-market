@@ -78,6 +78,14 @@ gh workflow run deploy-backend.yml -f market_mode=scheduled     # 정규장 시�
 
 runner의 `SIMULATION_MARKET_MODE`는 `participant-runner/.env`에서 따로 맞춘다.
 
+### 호가창 구조와 matcher 쪽 만료
+
+호가창은 한쪽(매수·매도)마다 정렬된 가격 목록과 가격별 FIFO 큐, 주문 ID 인덱스, 가격별·전체 수량 합을 유지한다. 적재·체결·취소·조회·메트릭 갱신 비용은 잔량 크기와 무관하고, 스냅샷은 가격대 수에 비례한다. 취소는 지연 삭제라 큐 맨 앞에 왔을 때 걷어내며, 죽은 항목이 많아진 가격대는 다시 만든다. 가격·시간 우선과 maker 가격 체결 규칙은 이전 리스트 구현(`exchange/orderbook/reference_book.py`)과 같고, 무작위 비교 테스트가 이를 확인한다.
+
+`MATCHER_ORDER_MAX_AGE_SECONDS`(기본 0 = 끔)를 주면 그 시간 넘게 남은 주문을 matcher가 다음 요청 때 걷어낸다. runner TTL을 대체하지 않는 안전망이다. 응답을 못 받아 runner가 추적하지 못한 주문도 정리된다. 만료 건수는 `orders_expired_total`, 남은 주문 건수는 `orderbook_open_orders`로 본다. Azure VM에서는 `/etc/stock-market/overrides.env`에 두면 다음 배포부터 모든 샤드에 적용된다.
+
+잔량을 고정한 1건 비용은 `python3 scripts/bench_orderbook.py`로 잰다. 이전 구현(`reference`)과 현재 구현(`current`)을 같은 조건으로 나란히 출력한다.
+
 주문 취소는 idempotent하다. 열린 주문은 `status: CANCELED`로 취소되고, 이미 체결·취소되어 호가창에 없는 주문은 `status: ALREADY_CLOSED`로 정상 응답한다. 이는 TTL 기반 runner의 지연 취소를 오류와 구분하기 위한 현재 단계의 계약이다.
 
 최근 체결 API는 matcher가 종목별로 메모리에 보관하는 최대 200건을 최신순으로 반환한다. `limit`은 기본 50, 최대 200이다. 체결에는 UTC `executed_at`이 포함되며 backend 재시작 시 호가창과 함께 초기화된다.
@@ -92,7 +100,7 @@ runner의 `SIMULATION_MARKET_MODE`는 `participant-runner/.env`에서 따로 맞
 
 Compose 환경은 KRX 참조 데이터와 트레이더 설정을 PostgreSQL에 저장한다. 주문·체결과 호가창은 아직 메모리에만 있으며 backend 재시작 시 초기화된다. 로컬 `make backend-test`는 빠른 단위 테스트를 위해 SQLite를 사용한다.
 
-`DATABASE_ENGINE`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`, `KRX_API_KEY`, `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`, `TRADE_EXECUTION_LOG_ENABLED`, `SIMULATION_SYMBOL_LIMIT`, `SIMULATION_SHARD_COUNT`, `SIMULATION_SHARD_INDEX`, `SIMULATION_EVENT_MAX_AGE_SECONDS`, `PORT`는 환경 변수로 설정할 수 있습니다. 기본값은 로컬 개발 전용이며 배포 환경에서는 사용하지 않습니다.
+`DATABASE_ENGINE`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`, `KRX_API_KEY`, `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`, `TRADE_EXECUTION_LOG_ENABLED`, `SIMULATION_SYMBOL_LIMIT`, `SIMULATION_SHARD_COUNT`, `SIMULATION_SHARD_INDEX`, `SIMULATION_EVENT_MAX_AGE_SECONDS`, `MATCHER_ORDER_MAX_AGE_SECONDS`, `PORT`는 환경 변수로 설정할 수 있습니다. 기본값은 로컬 개발 전용이며 배포 환경에서는 사용하지 않습니다.
 
 ## KRX reference import
 

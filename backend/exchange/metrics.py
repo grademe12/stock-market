@@ -39,6 +39,16 @@ ORDERBOOK_DEPTH = Gauge(
     "Total remaining order quantity by symbol and side.",
     ("symbol", "side"),
 )
+ORDERBOOK_OPEN_ORDERS = Gauge(
+    "orderbook_open_orders",
+    "Number of resting orders by symbol.",
+    ("symbol",),
+)
+ORDERS_EXPIRED = Counter(
+    "orders_expired",
+    "Resting orders the matcher removed after MATCHER_ORDER_MAX_AGE_SECONDS.",
+    ("symbol",),
+)
 
 
 class PrometheusMetricsMiddleware:
