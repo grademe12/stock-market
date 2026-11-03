@@ -5,7 +5,7 @@
 
 ## 한눈에 보기
 
-가상 트레이더 수천 명이 주문하는 매칭 엔진을 GCE에 올리고, 병목을 하나씩 재며 구조를 바꿨습니다. 날짜별 조건·숫자·해석 한계는 [`report/`](report/)에 있습니다.
+가상 트레이더 수천 명이 주문하는 매칭 엔진을 GCE(Day 1–5)와 Azure(Day 6~)에 올리고, 병목을 하나씩 재며 구조를 바꿨습니다. 날짜별 조건·숫자·해석 한계는 [`report/`](report/)에 있습니다.
 
 | 단계 | 바꾼 것 | 결과 |
 |---|---|---|
@@ -14,6 +14,7 @@
 | [Day 3](report/DAY3_MATCHER_SATURATION_REPORT.md) | 동시 전송 64, 틱 250ms | 호가 잔량 1.1만 → 190만, 초당 주문 139 → 17건, p50 3.5 → 300ms |
 | [Day 4](report/DAY4_VERTICAL_SCALE_REPORT.md) | 공유 코어 `e2-medium` → `e2-standard-4` | 접수는 회복, 잔량은 다시 증가. 하드웨어는 시간을 벌 뿐 |
 | [Day 5](report/DAY5_SINGLE_ENTRY_GATEWAY_REPORT.md) | 종목 라우터 단일 진입점 + 매처 4개(loopback) | 3일 연속 초당 약 146건, p50 2.7ms, p99 19ms, 5xx 0 |
+| [Day 6](report/DAY6_AZURE_BASELINE_REPORT.md) | Azure VM 이전, runner 컨테이너 11개, 게이트웨이 backlog 5 → 2048 | 접수 290 → 550건/s 뒤 matcher 포화. 21시간에 잔량 641만 주, 초당 주문 22건, p50 491ms. 수직 확장은 긴급 레버가 아님 |
 
 - 코어를 다 못 쓴 이유: Python GIL, 프로세스 메모리에 있는 호가창, 공유 코어 VM, 코어 수와 프로세스 수 불일치
 - 가장 큰 교훈: CPU 사용률은 결과일 뿐이고, 주문 한 건에 드는 일의 양을 같이 봐야 한다
@@ -33,7 +34,7 @@
 | [docs/UBUNTU_SETUP.md](docs/UBUNTU_SETUP.md) | Ubuntu/WSL 1회 셋업 체크리스트 |
 | [docs/GCP_DEPLOYMENT_READINESS.md](docs/GCP_DEPLOYMENT_READINESS.md) | Tailscale 기반 GCE·로컬 PostgreSQL 배포 결정과 완료 조건 |
 | [docs/GCP_RESTORE_RUNBOOK.md](docs/GCP_RESTORE_RUNBOOK.md) | GCP 인프라 복구·계정 이전·비용 안전 철거 절차 |
-| [docs/EVENT_SPIKE_ROADMAP.md](docs/EVENT_SPIKE_ROADMAP.md) | 호가창 비용 개선(Day 6) → 공시 재생 실험 → 정규장 실전 운영 로드맵 |
+| [docs/EVENT_SPIKE_ROADMAP.md](docs/EVENT_SPIKE_ROADMAP.md) | 호가창 비용 개선(Day 7) → 공시 재생 실험 → 정규장 실전 운영 로드맵 |
 | [observability/README.md](observability/README.md) | Prometheus·Grafana 백엔드 모니터링 실행 방법 |
 
 ## 프로젝트 구조

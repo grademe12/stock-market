@@ -1,4 +1,4 @@
-# 실제 공시 spike까지의 로드맵 (Day 6 ~ 실전 운영)
+# 실제 공시 spike까지의 로드맵 (Day 7 ~ 실전 운영)
 
 > **상태**: 계획. 아직 구현하지 않았다.
 >
@@ -6,22 +6,24 @@
 >
 > 순서가 중요하다. 호가창 비용 문제(Day 3)를 먼저 닫지 않으면, spike 결과가 "뉴스 때문"인지 "원래 약점"인지 구분할 수 없다.
 
-**관련 문서**: [뉴스 트리거 spike 계획](./NEWS_TRIGGERED_LOAD_SPIKE_PLAN.md) · [정규장 세션 계획](./REGULAR_MARKET_SESSION_PLAN.md) · [Day 3 매칭기 포화 보고서](../report/DAY3_MATCHER_SATURATION_REPORT.md) · [Day 5 단일 진입점 보고서](../report/DAY5_SINGLE_ENTRY_GATEWAY_REPORT.md) · [GCP 복구 Runbook](./GCP_RESTORE_RUNBOOK.md)
+**관련 문서**: [뉴스 트리거 spike 계획](./NEWS_TRIGGERED_LOAD_SPIKE_PLAN.md) · [정규장 세션 계획](./REGULAR_MARKET_SESSION_PLAN.md) · [Day 3 매칭기 포화 보고서](../report/DAY3_MATCHER_SATURATION_REPORT.md) · [Day 5 단일 진입점 보고서](../report/DAY5_SINGLE_ENTRY_GATEWAY_REPORT.md) · [Day 6 Azure 기준선 보고서](../report/DAY6_AZURE_BASELINE_REPORT.md) · [GCP 복구 Runbook](./GCP_RESTORE_RUNBOOK.md)
 
 ---
 
 ## 0. 전제와 실행 환경
 
-- GCP 인프라는 비용 때문에 철거했다(2026-10). 이 로드맵은 **집 장비**에서 돌리는 것을 기본으로 한다.
-  - 데스크톱: matcher 샤드 + 종목 라우터
+- GCP 인프라는 비용 때문에 철거했다(2026-10). 백엔드는 Azure VM 하나로 옮겼다(2026-10-30, [`infra-azure/`](../infra-azure/README.md)).
+  - Azure `Standard_D4as_v5`(4 vCPU): matcher 샤드 4개 + 종목 라우터
   - 미니 PC: participant-runner, Prometheus/Grafana, PostgreSQL, market-event-analyzer
-  - 연결은 지금처럼 Tailscale. 공유기 포트는 열지 않는다.
+  - 연결은 지금처럼 Tailscale. VM 인바운드는 Tailscale UDP만 연다.
+  - 무료 체험 기간(약 30일)에 맞춰 측정하지 않을 때는 VM을 deallocate한다.
 - 하드웨어가 GCE와 다르므로 **Day 1~5 숫자와 절대 비교하지 않는다.** 각 단계는 같은 기계에서 전후를 비교한다.
+- E1의 "변경 전" 기준선은 [Day 6 보고서](../report/DAY6_AZURE_BASELINE_REPORT.md)다. 그 과정에서 게이트웨이 backlog(5 → 2048)를 고쳤고, 요청마다 호가창 전체를 훑는 메트릭 갱신을 새로 찾았다.
 - 보고서는 기존 형식(측정 조건 → 바뀐 것 → 숫자 → 병목 → 해석 한계 → 다음)을 그대로 쓴다.
 
 ---
 
-## E1 — Day 6: 호가창 한 건의 비용 줄이기
+## E1 — Day 7: 호가창 한 건의 비용 줄이기
 
 ### 현재 구조 (`backend/exchange/orderbook/book.py`)
 
@@ -30,6 +32,8 @@
 | 잔량 적재 `_rest` | 리스트에 append 후 매번 전체 `sort` | O(n log n) |
 | 취소 `cancel`, 조회 `get_open_order` | 양쪽 리스트를 앞에서부터 순회 | O(n) |
 | 호가 스냅샷 `_levels` | 모든 주문을 순회해 가격대로 합산 | O(n) |
+| 체결로 맨 앞 주문 제거 | `list.pop(0)` | O(n) |
+| 메트릭 갱신 `_update_orderbook_depth` (`views.py`) | 모든 주문·취소 뒤에 스냅샷 호출 | 요청마다 O(n) |
 | 만료 | 매칭기에 없음. runner의 DELETE에만 의존 | 취소가 밀리면 잔량이 계속 증가 |
 
 Day 3에서 잔량이 190만까지 쌓이자 CPU는 1.5 → 1.9로 올랐는데 초당 주문은 139 → 17건으로 떨어졌다. 매칭 자체가 아니라 위 표의 적재·취소·스냅샷 비용이 원인이다.
@@ -38,20 +42,21 @@ Day 3에서 잔량이 190만까지 쌓이자 CPU는 1.5 → 1.9로 올랐는데 
 
 1. 가격대별 FIFO 큐 + 정렬된 가격 목록으로 바꾼다. 적재는 해당 가격 큐 뒤에 붙이고, 새 가격대만 정렬 위치를 찾는다(`bisect`).
 2. 주문 ID → 위치 인덱스(dict)를 둬서 취소·조회를 O(1)에 가깝게 한다.
-3. 가격대별 수량 합을 유지해 스냅샷이 주문 수가 아니라 가격대 수에 비례하게 한다.
+3. 가격대별 수량 합을 유지해 스냅샷이 주문 수가 아니라 가격대 수에 비례하게 한다. 메트릭 갱신은 유지하는 합계를 읽기만 한다.
 4. (선택) 매칭기 쪽 만료: 주문에 만료 시각을 두고, 매칭·조회 시점에 만료된 주문을 걷어낸다. runner DELETE가 밀려도 잔량이 무한히 늘지 않게 한다.
 
 가격·시간 우선, 부분 체결, maker 가격 체결 규칙은 바꾸지 않는다. 기존 단위 테스트가 그대로 통과해야 한다.
 
 ### 측정
 
-- 같은 기계, 같은 runner 설정(Day 3 후반: 동시성 64, 틱 250ms, `MAX_TRADERS=1000`)으로 **변경 전 → 변경 후**를 각각 6시간 이상 돌린다.
+- 같은 기계, 같은 runner 설정(Day 6: 컨테이너 11개, 컨테이너별 동시성 64, 틱 250ms, `MAX_TRADERS=1000`, `always_open`)으로 **변경 전 → 변경 후**를 각각 6시간 이상 돌린다. 변경 전은 Day 6 보고서로 대신한다.
 - 보는 지표: `orderbook_depth` 합, 주문 POST/s, POST p50/p99, 프로세스 CPU, RSS, runner 타임아웃.
-- 보조로 잔량을 고정한 마이크로벤치(잔량 1만/10만/100만에서 주문 1건·취소 1건·스냅샷 1건 시간)를 남긴다.
+- 보조로 잔량을 고정한 마이크로벤치(잔량 1만/10만/100만에서 주문 1건·취소 1건·스냅샷 1건·메트릭 갱신 1건 시간)를 남긴다.
+- matcher `/metrics`가 주문과 같은 스레드에서 기다려 스크레이프가 끊긴다(Day 6). 게이트웨이·VM CPU는 Prometheus에 없으니 Run Command 샘플을 같이 남긴다.
 
 ### 판정 기준
 
-- 변경 전: 잔량이 늘수록 p50이 커지고 POST/s가 떨어지는 Day 3 패턴이 재현되어야 한다(재현이 안 되면 환경 차이부터 기록).
+- 변경 전: 잔량이 늘수록 p50이 커지고 POST/s가 떨어지는 Day 3 패턴이 재현되어야 한다. Day 6에서 재현됐다(잔량 109만 → 641만 주, 주문 344 → 22/s, p50 12 → 491ms).
 - 변경 후: 잔량이 같은 수준일 때 p50과 POST/s가 잔량 크기에 거의 영향을 받지 않아야 한다.
 - 만료를 넣었다면: 6시간 동안 잔량 합이 평형에 머물러야 한다.
 
@@ -109,8 +114,9 @@ Day 3에서 잔량이 190만까지 쌓이자 CPU는 1.5 → 1.9로 올랐는데 
 
 | 단계 | 기간 | 산출물 |
 |---|---|---|
-| E1 | 약 1주 | `report/DAY6_ORDERBOOK_COST_REPORT.md`, 마이크로벤치 결과 |
-| E2 | 약 1주 | 녹화·재생 도구, `report/DAY7_EVENT_REPLAY_REPORT.md` |
-| E3 | 1~2주 | 장 시간 자동 운영 설정, `report/DAY8_LIVE_MARKET_REPORT.md` |
+| 기준선 | 완료 | [`report/DAY6_AZURE_BASELINE_REPORT.md`](../report/DAY6_AZURE_BASELINE_REPORT.md) |
+| E1 | 약 1주 | `report/DAY7_ORDERBOOK_COST_REPORT.md`, 마이크로벤치 결과 |
+| E2 | 약 1주 | 녹화·재생 도구, `report/DAY8_EVENT_REPLAY_REPORT.md` |
+| E3 | 1~2주 | 장 시간 자동 운영 설정, `report/DAY9_LIVE_MARKET_REPORT.md` |
 
 E1을 건너뛰고 E2·E3을 먼저 하지 않는다. E1 결과가 기대와 다르면(잔량이 늘어도 비용이 그대로 오르면) E2로 넘어가기 전에 원인을 먼저 찾는다.
