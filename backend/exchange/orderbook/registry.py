@@ -2,13 +2,21 @@ from datetime import date
 from threading import RLock
 from uuid import UUID
 
+from django.conf import settings
+
+from exchange.metrics import ORDERS_EXPIRED
 from exchange.orderbook.book import OrderBook
 from exchange.orderbook.types import MatchResult, OpenOrder, Order, OrderNotFoundError
 from exchange.simulation import is_owned_symbol, reset_simulated_tickers_cache
 
 
 class OrderBookRegistry:
-    """In-process map of symbol to its single-writer order book."""
+    """In-process map of symbol to its single-writer order book.
+
+    ``_order_symbols`` maps only resting orders to their symbol so a cancel
+    can find its book. Books report when an order starts resting and when it
+    leaves by a fill or expiry, so filled orders do not stay in the map.
+    """
 
     def __init__(self) -> None:
         self._lock = RLock()
@@ -54,18 +62,36 @@ class OrderBookRegistry:
         with self._lock:
             book = self._books.get(symbol)
             if book is None:
-                book = OrderBook(symbol=symbol)
+                book = OrderBook(
+                    symbol=symbol,
+                    max_age_seconds=getattr(settings, "MATCHER_ORDER_MAX_AGE_SECONDS", 0),
+                    on_rest=lambda order_id, symbol=symbol: self._order_rested(order_id, symbol),
+                    on_close=lambda order_id, reason, symbol=symbol: self._order_closed(
+                        order_id, reason, symbol
+                    ),
+                )
                 self._books[symbol] = book
             return book
+
+    def open_order_id_count(self) -> int:
+        with self._lock:
+            return len(self._order_symbols)
+
+    def _order_rested(self, order_id: UUID, symbol: str) -> None:
+        with self._lock:
+            self._order_symbols[order_id] = symbol
+
+    def _order_closed(self, order_id: UUID, reason: str, symbol: str) -> None:
+        with self._lock:
+            self._order_symbols.pop(order_id, None)
+        if reason == "expired":
+            ORDERS_EXPIRED.labels(symbol).inc()
 
     def submit(self, order: Order) -> MatchResult:
         book = self.get(order.symbol)
         if book is None:
             raise LookupError(f"symbol {order.symbol} is not simulated")
-        result = book.submit(order)
-        with self._lock:
-            self._order_symbols[order.order_id] = order.symbol
-        return result
+        return book.submit(order)
 
     def cancel(self, order_id: UUID) -> OpenOrder:
         with self._lock:

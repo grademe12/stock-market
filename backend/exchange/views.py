@@ -25,6 +25,7 @@ from exchange.simulation import (
 from exchange.market_session import ALWAYS_OPEN, MarketSession
 from exchange.metrics import (
     ORDERBOOK_DEPTH,
+    ORDERBOOK_OPEN_ORDERS,
     ORDERS_REJECTED,
     ORDERS_SUBMITTED,
     TRADED_QUANTITY,
@@ -58,6 +59,7 @@ def _rollover_market_session() -> None:
     for symbol in cleared_symbols:
         for side in OrderSide:
             ORDERBOOK_DEPTH.labels(symbol, side.value).set(0)
+        ORDERBOOK_OPEN_ORDERS.labels(symbol).set(0)
 
     logging.info(
         "event=market_session_rollover session_date=%s cleared_symbols=%s",
@@ -70,14 +72,10 @@ def _update_orderbook_depth(symbol: str) -> None:
     book = books.get(symbol)
     if book is None:
         return
-    snapshot = book.snapshot()
-    for side, levels in (
-        (OrderSide.BUY, snapshot.bids),
-        (OrderSide.SELL, snapshot.asks),
-    ):
-        ORDERBOOK_DEPTH.labels(symbol, side.value).set(
-            sum(level.quantity for level in levels)
-        )
+    # Read running totals; a full snapshot here cost O(resting orders) per request.
+    for side in (OrderSide.BUY, OrderSide.SELL):
+        ORDERBOOK_DEPTH.labels(symbol, side.value).set(book.total_quantity(side))
+    ORDERBOOK_OPEN_ORDERS.labels(symbol).set(book.open_order_count())
 
 
 @api_view(["GET"])
