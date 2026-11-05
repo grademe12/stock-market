@@ -22,6 +22,12 @@ scrape_configs:
         replacement: $1/shard/$2
         target_label: instance
 
+  # The gateway's own metrics (accept wait, matcher round trip, listen queue, CPU).
+  - job_name: stock-market-gateway
+    metrics_path: /gateway/metrics
+    static_configs:
+      - targets: ["stock-market-gce:8000"]
+
   - job_name: stock-market-backend-readiness
     metrics_path: /probe
     params:

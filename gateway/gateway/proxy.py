@@ -5,11 +5,14 @@ from __future__ import annotations
 from http.client import HTTPConnection
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import threading
 from urllib.parse import urlparse, urlsplit
 
 from gateway.discovery import advertised_scrape_target, prometheus_sd_targets
+from gateway.metrics import GatewayMetrics
 from gateway.routing import (
     RoutingError,
+    is_gateway_metrics_path,
     is_service_discovery_path,
     matcher_listen_port,
     route_request,
@@ -24,6 +27,28 @@ class GatewayHTTPServer(ThreadingHTTPServer):
     # this value at net.core.somaxconn.
     request_queue_size = 2048
 
+    def __init__(self, server_address, handler_class, *, metrics: GatewayMetrics | None = None) -> None:
+        self.metrics = metrics
+        self._accepted_at: dict[object, float] = {}
+        self._accepted_lock = threading.Lock()
+        super().__init__(server_address, handler_class)
+
+    def process_request(self, request, client_address) -> None:
+        # Runs on the accept loop. The handler thread reads this back so the
+        # wait between accept() and the thread actually running is visible.
+        if self.metrics is not None:
+            with self._accepted_lock:
+                self._accepted_at[request] = self.metrics.now()
+        super().process_request(request, client_address)
+
+    def process_request_thread(self, request, client_address) -> None:
+        if self.metrics is not None:
+            with self._accepted_lock:
+                accepted_at = self._accepted_at.pop(request, None)
+            if accepted_at is not None:
+                self.metrics.observe_accept_wait(self.metrics.now() - accepted_at)
+        super().process_request_thread(request, client_address)
+
 
 class GatewayHandler(BaseHTTPRequestHandler):
     tickers: tuple[str, ...] = ()
@@ -33,6 +58,8 @@ class GatewayHandler(BaseHTTPRequestHandler):
     shard_urls: tuple[str, ...] = ()
     public_port: int = 8000
     timeout_seconds: float = 5.0
+    metrics: GatewayMetrics | None = None
+    _status: int = 0
 
     def do_GET(self) -> None:
         self._proxy()
@@ -49,7 +76,27 @@ class GatewayHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: object) -> None:
         return
 
+    def send_response(self, code: int, message: str | None = None) -> None:
+        self._status = code
+        super().send_response(code, message)
+
     def _proxy(self) -> None:
+        metrics = self.metrics
+        if metrics is None:
+            self._handle()
+            return
+        if self.command == "GET" and is_gateway_metrics_path(urlsplit(self.path).path):
+            self._write_metrics(metrics)
+            return
+        started = metrics.now()
+        metrics.request_started()
+        self._status = 0
+        try:
+            self._handle()
+        finally:
+            metrics.request_finished(self.command, self._status, metrics.now() - started)
+
+    def _handle(self) -> None:
         parsed = urlsplit(self.path)
         length = int(self.headers.get("Content-Length", "0") or "0")
         body = self.rfile.read(length) if length else b""
@@ -77,10 +124,19 @@ class GatewayHandler(BaseHTTPRequestHandler):
             if key.lower() not in {"content-length"}
         }
         request_path = self._upstream_request_path(parsed, route.upstream_path)
+        metrics = self.metrics
+        upstream_started = metrics.now() if metrics is not None else 0.0
         try:
-            connection.request(self.command, request_path, body=body or None, headers=headers)
-            upstream = connection.getresponse()
-            payload = upstream.read()
+            try:
+                connection.request(self.command, request_path, body=body or None, headers=headers)
+                upstream = connection.getresponse()
+                payload = upstream.read()
+            except OSError:
+                if metrics is not None:
+                    metrics.observe_upstream(route.shard_index, metrics.now() - upstream_started, failed=True)
+                raise
+            if metrics is not None:
+                metrics.observe_upstream(route.shard_index, metrics.now() - upstream_started)
             self.send_response(upstream.status)
             for key, value in upstream.getheaders():
                 if key.lower() in {"transfer-encoding", "connection"}:
@@ -124,6 +180,14 @@ class GatewayHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
+    def _write_metrics(self, metrics: GatewayMetrics) -> None:
+        payload = metrics.render().encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
     def _write_error(self, status: int, detail: str) -> None:
         payload = json.dumps({"detail": detail}).encode("utf-8")
         self.send_response(status)
@@ -142,6 +206,7 @@ def make_handler(
     shard_urls: tuple[str, ...] = (),
     public_port: int = 8000,
     timeout_seconds: float = 5.0,
+    metrics: GatewayMetrics | None = None,
 ) -> type[GatewayHandler]:
     class BoundHandler(GatewayHandler):
         pass
@@ -153,6 +218,7 @@ def make_handler(
     BoundHandler.shard_urls = shard_urls
     BoundHandler.public_port = public_port
     BoundHandler.timeout_seconds = timeout_seconds
+    BoundHandler.metrics = metrics
     return BoundHandler
 
 
@@ -166,6 +232,7 @@ def serve(
     first_matcher_port: int = 8001,
     shard_urls: tuple[str, ...] = (),
 ) -> None:
+    metrics = GatewayMetrics(listen_port=port)
     handler = make_handler(
         tickers=tickers,
         shard_count=shard_count,
@@ -173,6 +240,7 @@ def serve(
         first_matcher_port=first_matcher_port,
         shard_urls=shard_urls,
         public_port=port,
+        metrics=metrics,
     )
-    server = GatewayHTTPServer((bind, port), handler)
+    server = GatewayHTTPServer((bind, port), handler, metrics=metrics)
     server.serve_forever()
