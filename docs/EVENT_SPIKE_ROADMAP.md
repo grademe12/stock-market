@@ -6,7 +6,7 @@
 >
 > 순서가 중요하다. 호가창 비용 문제(Day 3)를 먼저 닫지 않으면, spike 결과가 "뉴스 때문"인지 "원래 약점"인지 구분할 수 없다.
 
-**관련 문서**: [뉴스 트리거 spike 계획](./NEWS_TRIGGERED_LOAD_SPIKE_PLAN.md) · [정규장 세션 계획](./REGULAR_MARKET_SESSION_PLAN.md) · [Day 3 매칭기 포화 보고서](../report/DAY3_MATCHER_SATURATION_REPORT.md) · [Day 5 단일 진입점 보고서](../report/DAY5_SINGLE_ENTRY_GATEWAY_REPORT.md) · [Day 6 Azure 기준선 보고서](../report/DAY6_AZURE_BASELINE_REPORT.md) · [GCP 복구 Runbook](./GCP_RESTORE_RUNBOOK.md)
+**관련 문서**: [뉴스 트리거 spike 계획](./NEWS_TRIGGERED_LOAD_SPIKE_PLAN.md) · [정규장 세션 계획](./REGULAR_MARKET_SESSION_PLAN.md) · [Day 3 매칭기 포화 보고서](../report/DAY3_MATCHER_SATURATION_REPORT.md) · [Day 5 단일 진입점 보고서](../report/DAY5_SINGLE_ENTRY_GATEWAY_REPORT.md) · [Day 6 Azure 기준선 보고서](../report/DAY6_AZURE_BASELINE_REPORT.md) · [Day 7 호가창 비용 보고서](../report/DAY7_ORDERBOOK_COST_REPORT.md) · [GCP 복구 Runbook](./GCP_RESTORE_RUNBOOK.md)
 
 ---
 
@@ -24,6 +24,8 @@
 ---
 
 ## E1 — Day 7: 호가창 한 건의 비용 줄이기
+
+> **완료(2026-11-04)**: [Day 7 보고서](../report/DAY7_ORDERBOOK_COST_REPORT.md). 아래 "현재 구조"는 변경 전 기록이다.
 
 ### 현재 구조 (`backend/exchange/orderbook/book.py`)
 
@@ -57,8 +59,8 @@ Day 3에서 잔량이 190만까지 쌓이자 CPU는 1.5 → 1.9로 올랐는데 
 ### 판정 기준
 
 - 변경 전: 잔량이 늘수록 p50이 커지고 POST/s가 떨어지는 Day 3 패턴이 재현되어야 한다. Day 6에서 재현됐다(잔량 109만 → 641만 주, 주문 344 → 22/s, p50 12 → 491ms).
-- 변경 후: 잔량이 같은 수준일 때 p50과 POST/s가 잔량 크기에 거의 영향을 받지 않아야 한다.
-- 만료를 넣었다면: 6시간 동안 잔량 합이 평형에 머물러야 한다.
+- 변경 후: 잔량이 같은 수준일 때 p50과 POST/s가 잔량 크기에 거의 영향을 받지 않아야 한다. Day 7에서 확인했다(잔량 113만 → 511만 주 동안 p50 2.6 → 2.7ms, 주문 590 → 555/s). 실행은 6시간 대신 2시간 41분이었다.
+- 만료를 넣었다면: 6시간 동안 잔량 합이 평형에 머물러야 한다. 만료는 장 마감 정리의 대체물이라 재측정하지 않았다. 기본 꺼짐으로 남기고 단위 테스트로만 검증했다.
 
 ### 비목표
 
@@ -115,7 +117,7 @@ Day 3에서 잔량이 190만까지 쌓이자 CPU는 1.5 → 1.9로 올랐는데 
 | 단계 | 기간 | 산출물 |
 |---|---|---|
 | 기준선 | 완료 | [`report/DAY6_AZURE_BASELINE_REPORT.md`](../report/DAY6_AZURE_BASELINE_REPORT.md) |
-| E1 | 약 1주 | `report/DAY7_ORDERBOOK_COST_REPORT.md`, 마이크로벤치 결과 |
+| E1 | 완료 | [`report/DAY7_ORDERBOOK_COST_REPORT.md`](../report/DAY7_ORDERBOOK_COST_REPORT.md), [마이크로벤치 결과](../report/data/day7/bench-orderbook.txt) |
 | E2 | 약 1주 | 녹화·재생 도구, `report/DAY8_EVENT_REPLAY_REPORT.md` |
 | E3 | 1~2주 | 장 시간 자동 운영 설정, `report/DAY9_LIVE_MARKET_REPORT.md` |
 

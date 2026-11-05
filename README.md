@@ -15,6 +15,7 @@
 | [Day 4](report/DAY4_VERTICAL_SCALE_REPORT.md) | 공유 코어 `e2-medium` → `e2-standard-4` | 접수는 회복, 잔량은 다시 증가. 하드웨어는 시간을 벌 뿐 |
 | [Day 5](report/DAY5_SINGLE_ENTRY_GATEWAY_REPORT.md) | 종목 라우터 단일 진입점 + 매처 4개(loopback) | 3일 연속 초당 약 146건, p50 2.7ms, p99 19ms, 5xx 0 |
 | [Day 6](report/DAY6_AZURE_BASELINE_REPORT.md) | Azure VM 이전, runner 컨테이너 11개, 게이트웨이 backlog 5 → 2048 | 접수 290 → 550건/s 뒤 matcher 포화. 21시간에 잔량 641만 주, 초당 주문 22건, p50 491ms. 수직 확장은 긴급 레버가 아님 |
+| [Day 7](report/DAY7_ORDERBOOK_COST_REPORT.md) | 호가창을 가격대별 큐 + 주문 ID 인덱스 + 수량 합으로 재작성 | 같은 잔량(약 510만 주)에서 초당 주문 30 → 555건, p50 364 → 2.7ms. 다음 병목은 게이트웨이 단일 프로세스(추정) |
 
 - 코어를 다 못 쓴 이유: Python GIL, 프로세스 메모리에 있는 호가창, 공유 코어 VM, 코어 수와 프로세스 수 불일치
 - 가장 큰 교훈: CPU 사용률은 결과일 뿐이고, 주문 한 건에 드는 일의 양을 같이 봐야 한다
