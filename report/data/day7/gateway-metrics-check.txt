@@ -1,0 +1,35 @@
+# Gateway metrics check, 2026-11-05 22:55-23:15 KST
+# Same runner conditions as Day 7 Run A (11 containers, concurrency 64, tick 250ms,
+# MAX_TRADERS=1000, always_open, matcher expiry off). Deploy 9e49ef3 (PR #32).
+# Prometheus http://<mini-pc>:9090, job stock-market-gateway, scrape 15s.
+
+## Prometheus at ~23:06 (5m rate)
+gateway requests/s            846
+gateway process CPU (cores)   1.09
+gateway POST p50              9.2 ms
+upstream (matcher) p50        7.6 ms
+accept wait p50               0.3 ms
+matcher orders_submitted/s    575
+
+## Prometheus 10m windows at ~23:12
+gateway POST p50 / p99        9.4 ms / 99.8 ms
+gateway GET p50               7.5 ms
+gateway DELETE p50            6.6 ms
+accept wait p99               2.4 ms
+in-flight (avg)               10.8
+threads (max)                 63
+listen queue avg / max        79.9 / 363
+
+## gateway_listen_queue, query_range last 25m, step 15s
+samples 67  p50 12  p90 193  max 363
+
+## curl from mini PC (Tailscale RTT 2.5-5.5 ms, avg 3.2 ms)
+# GET /api/v1/books/005930/ x6
+connect 4-60 ms, ttfb 99-320 ms
+# POST /api/v1/orders/ with body {} x30 -> 400 from gateway routing (no matcher call)
+connect p50 5.7 ms; ttfb min 14.7 ms, p50 222 ms, p90 400 ms, max 470 ms
+# mini PC TCP counters during the 30-request loop (~8 s, host-wide incl. runners)
+TcpExtTCPSynRetrans +25, TcpRetransSegs +266
+
+## mini PC
+vmstat: us 40 sy 17 id 43; /proc/pressure/cpu some avg60 30.1
