@@ -5,6 +5,7 @@ Prometheus and Grafana run on the mini PC and reach the GCE backend over Tailsca
 ## Components
 
 - Prometheus scrapes each matcher shard every 15 seconds through the public gateway. `GET /api/v1/prometheus-sd/` on `:8000` advertises `stock-market-gce:8000` with `__metrics_path__=/metrics/{shard}/`. Reload Prometheus after that endpoint is up.
+- Prometheus scrapes the gateway's own metrics at `stock-market-gce:8000/gateway/metrics` (job `stock-market-gateway`): listen queue, accept wait, matcher round trip by shard, process CPU and memory. See [`gateway/README.md`](../gateway/README.md).
 - Blackbox exporter probes `/api/v1/ready/`, including the backend database check.
 - Grafana provisions the Prometheus datasource and the `Stock Market Backend` dashboard automatically.
 

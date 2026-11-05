@@ -17,6 +17,7 @@ TRADES_PATH = re.compile(r"^/api/v1/trades/?$")
 METRICS_SHARD_PATH = re.compile(r"^/metrics/(\d+)/?$")
 READY_SHARD_PATH = re.compile(r"^/api/v1/ready/(\d+)/?$")
 SERVICE_DISCOVERY_PATH = re.compile(r"^/api/v1/prometheus-sd/?$")
+GATEWAY_METRICS_PATH = re.compile(r"^/gateway/metrics/?$")
 DEFAULT_SHARD_PATHS = (
     re.compile(r"^/api/v1/health/?$"),
     re.compile(r"^/api/v1/events/?$"),
@@ -106,6 +107,12 @@ def _symbol_from_request(
         return _required_query_symbol(query)
 
     raise RoutingError(404, "gateway route is not allowed")
+
+
+def is_gateway_metrics_path(path: str) -> bool:
+    """The gateway's own metrics, served without touching a matcher."""
+    normalized = path if path.startswith("/") else f"/{path}"
+    return GATEWAY_METRICS_PATH.match(normalized) is not None
 
 
 def is_service_discovery_path(path: str) -> bool:
