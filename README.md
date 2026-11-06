@@ -1,85 +1,83 @@
 # Stock Market
 
-주식 거래 애플리케이션을 모방한 학습용 프로젝트입니다.  
-단일 Django 매칭 엔진에서 시작해 부하 제어·테스트·모니터링·이벤트 파이프라인을 필요한 시점에 하나씩 도입합니다.
+가상 트레이더 수천 명이 주문을 넣는 모의 주식 거래소입니다. 매칭 엔진을 클라우드 VM에 올려 두고, 부하를 키우면서 어디가 먼저 막히는지 재고, 그 결과에 따라 구조를 바꿔 온 기록입니다.
 
-## 한눈에 보기
-
-가상 트레이더 수천 명이 주문하는 매칭 엔진을 GCE(Day 1–5)와 Azure(Day 6~)에 올리고, 병목을 하나씩 재며 구조를 바꿨습니다. 날짜별 조건·숫자·해석 한계는 [`report/`](report/)에 있습니다.
+실제 증권사 주문이나 실제 자산은 다루지 않습니다. KRX 데이터는 종목 목록과 기준 가격을 가져오는 데만 씁니다.
 
 | 단계 | 바꾼 것 | 결과 |
 |---|---|---|
-| [Day 1](report/DAY1_LOAD_BOTTLENECK_REPORT.md) | 5종목, 트레이더 2,000명 | 주문마다 원격 DB를 읽어 처리량이 절반으로 감소. 기동 시 캐시로 주문 평균 38ms → 1.8ms |
-| [Day 2](report/DAY2_MATCHER_SHARD_REPORT.md) | 매처를 종목 단위 프로세스 2개로 샤딩 | 두 코어를 고르게 사용. 처리량은 그대로(병목은 runner) |
-| [Day 3](report/DAY3_MATCHER_SATURATION_REPORT.md) | 동시 전송 64, 틱 250ms | 호가 잔량 1.1만 → 190만, 초당 주문 139 → 17건, p50 3.5 → 300ms |
-| [Day 4](report/DAY4_VERTICAL_SCALE_REPORT.md) | 공유 코어 `e2-medium` → `e2-standard-4` | 접수는 회복, 잔량은 다시 증가. 하드웨어는 시간을 벌 뿐 |
-| [Day 5](report/DAY5_SINGLE_ENTRY_GATEWAY_REPORT.md) | 종목 라우터 단일 진입점 + 매처 4개(loopback) | 3일 연속 초당 약 146건, p50 2.7ms, p99 19ms, 5xx 0 |
-| [Day 6](report/DAY6_AZURE_BASELINE_REPORT.md) | Azure VM 이전, runner 컨테이너 11개, 게이트웨이 backlog 5 → 2048 | 접수 290 → 550건/s 뒤 matcher 포화. 21시간에 잔량 641만 주, 초당 주문 22건, p50 491ms. 수직 확장은 긴급 레버가 아님 |
-| [Day 7](report/DAY7_ORDERBOOK_COST_REPORT.md) | 호가창을 가격대별 큐 + 주문 ID 인덱스 + 수량 합으로 재작성 | 같은 잔량(약 510만 주)에서 초당 주문 30 → 555건, p50 364 → 2.7ms. 다음 병목은 게이트웨이 단일 프로세스. 연결이 앞단 커널 대기열에서 0.2–0.4초 대기(메트릭으로 확인) |
+| Day 1 | 주문마다 원격 DB를 읽던 부분을 기동 시 캐시로 | 주문 평균 38ms → 1.8ms |
+| Day 5 | 종목 라우터 하나 + 매칭 프로세스 4개 | 3일 연속 초당 약 146건, p50 2.7ms, 5xx 0 |
+| Day 7 | 호가창 자료구조 재작성 | 잔량 약 510만 주에서 초당 주문 30 → 555건, p50 364ms → 2.7ms |
 
-- 코어를 다 못 쓴 이유: Python GIL, 프로세스 메모리에 있는 호가창, 공유 코어 VM, 코어 수와 프로세스 수 불일치
-- 가장 큰 교훈: CPU 사용률은 결과일 뿐이고, 주문 한 건에 드는 일의 양을 같이 봐야 한다
-- 코드는 AI 코딩 에이전트가 작성했고, 질문·실험 설계·판단은 직접 했습니다
-- 프로젝트 설명: <https://woosupar.dev/projects/stock-market/>
+날짜별 측정 조건과 해석의 한계는 [`report/`](report/)에, 전체 과정은 [프로젝트 소개](https://woosupar.dev/projects/stock-market/)에 정리했습니다.
 
-## 문서
-
-| 문서 | 내용 |
-|------|------|
-| [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md) | 프로젝트 목적과 현재 구현 범위 |
-| [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | 점진적 학습 단계와 기술 도입 기준 |
-| [docs/LOAD_TEST_BASELINE.md](docs/LOAD_TEST_BASELINE.md) | k6 기준 부하 측정 조건과 결과 |
-| [docs/TRADING_PARTICIPANT_SIMULATION_PLAN.md](docs/TRADING_PARTICIPANT_SIMULATION_PLAN.md) | 가상 거래 참여자와 트레이더 설정 계획 |
-| [docs/NEWS_TRIGGERED_LOAD_SPIKE_PLAN.md](docs/NEWS_TRIGGERED_LOAD_SPIKE_PLAN.md) | 뉴스 발생을 모사한 트레이더 주문 spike 미확정 계획 |
-| [docs/DEMO_RUNBOOK.md](docs/DEMO_RUNBOOK.md) | 재현 가능한 backend·runner 실험 실행 절차 |
-| [docs/UBUNTU_SETUP.md](docs/UBUNTU_SETUP.md) | Ubuntu/WSL 1회 셋업 체크리스트 |
-| [docs/GCP_DEPLOYMENT_READINESS.md](docs/GCP_DEPLOYMENT_READINESS.md) | Tailscale 기반 GCE·로컬 PostgreSQL 배포 결정과 완료 조건 |
-| [docs/GCP_RESTORE_RUNBOOK.md](docs/GCP_RESTORE_RUNBOOK.md) | GCP 인프라 복구·계정 이전·비용 안전 철거 절차 |
-| [docs/EVENT_SPIKE_ROADMAP.md](docs/EVENT_SPIKE_ROADMAP.md) | 호가창 비용 개선(Day 7) → 공시 재생 실험 → 정규장 실전 운영 로드맵 |
-| [observability/README.md](observability/README.md) | Prometheus·Grafana 백엔드 모니터링 실행 방법 |
-
-## 프로젝트 구조
+## 구조
 
 ```text
-backend/       Django + Django REST Framework 거래소 API와 매칭 엔진
-participant-runner/ 별도 프로세스/컨테이너로 실행되는 HTTP 시장참여자
-db/            PostgreSQL·KRX 환경 설정 (실제 `.env`는 Git 제외)
-frontend/      향후 웹 클라이언트 (현재는 계획만 존재)
-docs/          구현·학습 계획
-loadtest/      부하 테스트 시나리오 (Stage 2부터)
-deploy/        Compose·Kubernetes 배포 구성 (필요 시 도입)
-observability/ 대시보드·알림 구성 (Stage 3부터)
+ participant-runner ──HTTP──▶ gateway :8000 ──▶ matcher 0  (127.0.0.1:8001)
+ (가상 트레이더)               종목 → 샤드      ──▶ matcher 1  (127.0.0.1:8002)
+                                                ──▶ ...
+                                                       │
+                                     PostgreSQL ◀──────┘  트레이더 설정, KRX 종목
+ Prometheus / Grafana ◀── /metrics
 ```
 
-## 현재 단계의 사전 요구사항
+| 구성 요소 | 하는 일 |
+|---|---|
+| `backend/` | Django REST API와 매칭 엔진. 호가창은 프로세스 메모리에 있고, 종목을 나눠 맡은 프로세스(샤드)마다 하나씩 돈다 |
+| `gateway/` | 외부에 열린 유일한 입구. 주문의 종목을 보고 담당 샤드로 넘긴다 |
+| `participant-runner/` | 거래소 밖에서 HTTP로만 주문하는 가상 트레이더. noise, momentum, mean reversion, 유동성 공급 전략이 있다 |
+| `observability/` | Prometheus와 Grafana 설정, 대시보드 |
+| `infra-azure/` | 백엔드 VM을 만드는 Terraform. 배포는 GitHub Actions가 이미지를 빌드해 VM에 올린다 |
 
-- Python 3.12 이상, make
-- Docker는 현재 Compose 실행과 PostgreSQL에 필요하다. kind·kubectl·helm은 Stage 6에서 필요해질 때 설치한다.
-- 환경별 설치 참고: [docs/UBUNTU_SETUP.md](docs/UBUNTU_SETUP.md)
+설계에서 가장 큰 제약은 **한 종목의 호가창은 한 프로세스에만 있어야 한다**는 점입니다. 같은 종목을 두 프로세스가 나눠 가지면 매수와 매도가 서로 만나지 못합니다. 그래서 코어를 더 쓰려면 프로세스 안의 스레드를 늘리는 대신 종목 단위로 프로세스를 나누고, 그 앞에 라우터를 둡니다.
 
-## 컨테이너 실행
+## 써 보려면
 
-backend와 외부 시장참여자 runner는 각각 독립 이미지로 패키징된다. 현재 호가창은 한 프로세스의 메모리에 있으므로 backend 컨테이너는 Gunicorn worker 1개로 실행한다.
+### 로컬에서 한 프로세스로 실행
 
-운영 매처와 게이트웨이는 GCE에 있다. 로컬 Compose로 그 스택을 올리던 명령은 제거했다. 시장참여자는 [participant-runner README](participant-runner/README.md)의 runner Compose로 실행한다.
+Python 3.12와 make가 필요합니다. 데이터베이스는 SQLite를 씁니다.
 
-상세 설정은 [backend README](backend/README.md)를 참고한다.
+```bash
+make backend-setup
+make backend-migrate
+SIMULATION_MARKET_MODE=always_open make backend-run   # http://127.0.0.1:8000
+```
 
-## 진행 방식
+다른 터미널에서 트레이더를 만들고 주문을 한 번 넣어 봅니다.
 
-Stage 0~2에서는 `backend/`의 Django 단일 프로세스와 k6만 사용한다. `frontend/`는 독립적으로 유지하며, 아직 구현하지 않는다. 기술을 추가하기 전에는 반드시 현재 구조의 측정 결과와 도입 가설을 계획 문서에 정의된 형식으로 남긴다.
+```bash
+cd backend && .venv/bin/python manage.py seed_traders --strategy noise --count 20 --seed 1
+cd ../participant-runner
+BACKEND_BASE_URL=http://127.0.0.1:8000 SIMULATION_MARKET_MODE=always_open \
+  PYTHONPATH=../backend python3 -m participant_runner --once
+```
 
-## 개발 상태
+`--once`를 빼면 계속 돕니다. 호가와 체결은 `GET /api/v1/books/005930/`, `GET /api/v1/trades/?symbol=005930`으로 볼 수 있습니다.
 
-프로젝트는 기술을 한꺼번에 도입하지 않고, **기능 구현 → 부하 측정 → 병목 관찰 → 다음 기술 도입** 순서로 진행합니다. 상세 기준은 [점진적 학습 계획](docs/IMPLEMENTATION_PLAN.md)을 참고하세요.
+### 알아 둘 것
 
-| Stage | 상태 |
-|-------|------|
-| 기존 kind/Makefile·observability 스캐폴딩 | 완료 (나중 단계에서 재사용) |
-| Stage 0: Django/DRF 개발 기반 정리 | 완료 |
-| Stage 1: 단일 프로세스 매칭 엔진 | 완료 |
-| Stage 1.5: 거래 참여자 시뮬레이션 | 완료 (외부 HTTP runner와 5개 전략, event_reactive는 휴면) |
-| Stage 2: k6 부하 테스트·기본 rate limit | 진행 중 (steady 기준 측정 완료, rate limit 예정) |
-| Stage 2.5: PostgreSQL·KRX KOSPI 참조 데이터 | 완료 (2026-07-27 상위 100개 적재 검증) |
-| Stage 3: 애플리케이션 관측성 | 진행 중 (`/metrics`, Prometheus·Grafana Compose, backend 대시보드 구현) |
-| Stage 4+: queue·영속화·K8s | 측정 결과에 따라 순차 도입 |
+- **장 시간:** 기본값은 정규장(평일 09:00~15:30 KST)에만 주문을 받습니다. 장외에 실행하면 주문이 `409 market is closed`로 거절됩니다. 위 예시처럼 백엔드와 러너 둘 다 `SIMULATION_MARKET_MODE=always_open`을 주면 시간과 상관없이 돕니다.
+- **종목:** KRX 데이터를 넣지 않으면 개발용 `005930` 한 종목만 거래됩니다. 상위 종목을 쓰려면 PostgreSQL과 KRX API 키가 필요합니다([`db/README.md`](db/README.md)).
+- **데이터는 메모리에만 있습니다:** 주문, 체결, 잔고는 저장하지 않습니다. 프로세스를 다시 시작하면 호가창이 비어 있습니다. 트레이더 설정과 종목 정보만 DB에 남습니다.
+- **워커 수를 늘리지 마세요:** 한 매칭 프로세스는 Gunicorn 워커 1개로 돌아야 합니다. 워커를 늘리면 같은 종목의 호가창이 둘로 갈라집니다.
+
+### 주요 API
+
+| 요청 | 설명 |
+|---|---|
+| `POST /api/v1/orders/` | 지정가 주문 (`user_id`, `symbol`, `side`, `price`, `qty`) |
+| `DELETE /api/v1/orders/{id}/?symbol=` | 미체결 주문 취소 |
+| `GET /api/v1/books/{symbol}/` | 가격별 호가 잔량 |
+| `GET /api/v1/trades/?symbol=&limit=50` | 최근 체결 |
+| `GET /api/v1/ready/` | DB 연결을 포함한 준비 상태, 샤드 번호 |
+
+전체 목록과 설정은 [`backend/README.md`](backend/README.md), 러너 설정은 [`participant-runner/README.md`](participant-runner/README.md)에 있습니다.
+
+## 테스트
+
+```bash
+make backend-setup
+make backend-test participant-runner-test gateway-test
+```
