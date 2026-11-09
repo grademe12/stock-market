@@ -14,14 +14,7 @@
 
 ## 구조
 
-```text
- participant-runner ──HTTP──▶ gateway :8000 ──▶ matcher 0  (127.0.0.1:8001)
- (가상 트레이더)               종목 → 샤드      ──▶ matcher 1  (127.0.0.1:8002)
-                                                ──▶ ...
-                                                       │
-                                     PostgreSQL ◀──────┘  트레이더 설정, KRX 종목
- Prometheus / Grafana ◀── /metrics
-```
+![모의 주식 거래소 구성도](docs/architecture.svg)
 
 | 구성 요소 | 하는 일 |
 |---|---|
